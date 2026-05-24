@@ -8,12 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [BreakupProfileEntity::class],
-    version = 2,
+    entities = [BreakupProfileEntity::class, JournalEntryEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class NoContactDatabase : RoomDatabase() {
     abstract fun breakupProfileDao(): BreakupProfileDao
+    abstract fun journalEntryDao(): JournalEntryDao
 
     companion object {
         private const val DatabaseName = "breakfree_db"
@@ -24,7 +25,7 @@ abstract class NoContactDatabase : RoomDatabase() {
                 NoContactDatabase::class.java,
                 DatabaseName
             )
-                .addMigrations(Migration1To2)
+                .addMigrations(Migration1To2, Migration2To3)
                 .build()
         }
 
@@ -110,6 +111,14 @@ abstract class NoContactDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE breakup_profile")
                 db.execSQL("ALTER TABLE breakup_profile_new RENAME TO breakup_profile")
+            }
+        }
+
+        private val Migration2To3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS journal_entry (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, mood TEXT NOT NULL, created_at_millis INTEGER NOT NULL)"
+                )
             }
         }
     }

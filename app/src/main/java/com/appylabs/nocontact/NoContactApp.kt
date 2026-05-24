@@ -1,6 +1,5 @@
 package com.appylabs.nocontact
 
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,19 +31,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.appylabs.nocontact.ui.home.HomeScreen
-import com.appylabs.nocontact.ui.journal.JournalScreen
-import com.appylabs.nocontact.ui.milestones.MilestonesScreen
+import com.appylabs.nocontact.ui.journal.JournalEditorRoute
+import com.appylabs.nocontact.ui.journal.JournalRoute
+import com.appylabs.nocontact.ui.milestones.MilestonesRoute
 import com.appylabs.nocontact.ui.onboarding.OnboardingRoute
 import com.appylabs.nocontact.ui.settings.SettingsRoute
 import com.appylabs.nocontact.ui.sos.SosScreen
@@ -59,6 +57,8 @@ private object AppRoute {
     const val Journal = "journal"
     const val Milestones = "milestones"
     const val Settings = "settings"
+    const val JournalNew = "journal/new"
+    const val JournalEdit = "journal/edit"
 }
 
 private data class BottomDestination(
@@ -142,6 +142,15 @@ fun NoContactApp() {
                         navController.navigate(AppRoute.Sos) {
                             launchSingleTop = true
                         }
+                    },
+                    onOpenJournal = {
+                        navController.navigate(AppRoute.Journal) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }
@@ -152,10 +161,27 @@ fun NoContactApp() {
                 )
             }
             composable(AppRoute.Journal) {
-                JournalScreen(modifier = Modifier.padding(innerPadding))
+                JournalRoute(
+                    modifier = Modifier.padding(innerPadding),
+                    onNewEntry = { navController.navigate(AppRoute.JournalNew) },
+                    onOpenEntry = { id -> navController.navigate("${AppRoute.JournalEdit}/$id") }
+                )
+            }
+            composable(AppRoute.JournalNew) {
+                JournalEditorRoute(
+                    entryId = null,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("${AppRoute.JournalEdit}/{id}") { backStackEntry ->
+                val id = backStackEntry.arguments?.getString("id")?.toIntOrNull()
+                JournalEditorRoute(
+                    entryId = id,
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(AppRoute.Milestones) {
-                MilestonesScreen(modifier = Modifier.padding(innerPadding))
+                MilestonesRoute(modifier = Modifier.padding(innerPadding))
             }
             composable(AppRoute.Settings) {
                 SettingsRoute(

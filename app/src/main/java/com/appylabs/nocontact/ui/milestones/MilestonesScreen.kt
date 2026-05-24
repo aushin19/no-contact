@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,32 +41,48 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.appylabs.nocontact.NoContactApplication
 import com.appylabs.nocontact.ui.theme.LocalNoContactColors
 import com.appylabs.nocontact.ui.theme.LocalNoContactDimensions
 import com.appylabs.nocontact.ui.theme.NoContactTheme
 
-private data class MilestoneBadge(
-    val days: Int,
-    val label: String,
-    val achieved: Boolean,
-    val accent: Color
-)
+private val LockedBadgeColor = Color(0xFF8A8A86)
 
-private data class MilestoneHistoryItem(
-    val days: Int,
-    val title: String,
-    val date: String,
-    val delta: String,
-    val accent: Color
-)
+private fun badgeColor(days: Int, achieved: Boolean, accentColor: Color): Color {
+    if (!achieved) return LockedBadgeColor
+    return when (days) {
+        1 -> accentColor
+        3 -> Color(0xFFB9642A)
+        7 -> Color(0xFF73777B)
+        14 -> Color(0xFFC9A227)
+        30 -> Color(0xFF2471A3)
+        60 -> Color(0xFF1E8449)
+        90 -> Color(0xFF8E44AD)
+        180 -> Color(0xFFE67E22)
+        else -> accentColor
+    }
+}
 
 @Composable
-fun MilestonesScreen(modifier: Modifier = Modifier) {
+fun MilestonesRoute(modifier: Modifier = Modifier) {
+    val application = LocalContext.current.applicationContext as NoContactApplication
+    val viewModel: MilestonesViewModel = viewModel(
+        factory = MilestonesViewModel.Factory(application.repository)
+    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    MilestonesScreen(state = uiState, modifier = modifier)
+}
+
+@Composable
+private fun MilestonesScreen(state: MilestonesUiState, modifier: Modifier = Modifier) {
     val dimensions = LocalNoContactDimensions.current
 
     LazyColumn(
@@ -82,11 +99,11 @@ fun MilestonesScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(dimensions.md)
     ) {
         item { MilestonesHeader() }
-        item { CurrentStreakCard() }
-        item { MilestoneBadgesCard() }
-        item { MilestoneHistoryCard() }
+        item { CurrentStreakCard(state = state) }
+        item { MilestoneBadgesCard(badges = state.badges) }
+        item { MilestoneHistoryCard(history = state.history) }
         item { ActionQuoteCard() }
-        item { NextMilestoneCard() }
+        item { NextMilestoneCard(state = state) }
     }
 }
 
@@ -139,7 +156,7 @@ private fun MilestonesHeader() {
 }
 
 @Composable
-private fun CurrentStreakCard() {
+private fun CurrentStreakCard(state: MilestonesUiState) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
@@ -161,7 +178,7 @@ private fun CurrentStreakCard() {
                 )
                 Spacer(Modifier.height(dimensions.sm))
                 Text(
-                    text = "23d 7h 42m 18s",
+                    text = state.streakDisplay,
                     style = MaterialTheme.typography.displayMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -188,13 +205,13 @@ private fun CurrentStreakCard() {
                 Spacer(Modifier.height(dimensions.xl))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "23 days",
+                        text = "${state.currentDays} days",
                         style = MaterialTheme.typography.titleLarge,
                         color = colors.accent,
                         modifier = Modifier.width(dimensions.xxl + dimensions.xxl + dimensions.md)
                     )
                     LinearProgressIndicator(
-                        progress = { 23f / 30f },
+                        progress = { state.progressToNext },
                         modifier = Modifier
                             .weight(1f)
                             .height(dimensions.xs)
@@ -204,7 +221,7 @@ private fun CurrentStreakCard() {
                         strokeCap = StrokeCap.Round
                     )
                     Text(
-                        text = "30 days",
+                        text = "${state.nextMilestoneDays} days",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.End,
@@ -213,7 +230,7 @@ private fun CurrentStreakCard() {
                 }
                 Spacer(Modifier.height(dimensions.sm))
                 Text(
-                    text = "You're 7 days away from your next milestone!",
+                    text = state.motivationalMessage,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -223,49 +240,30 @@ private fun CurrentStreakCard() {
 }
 
 @Composable
-private fun MilestoneBadgesCard() {
+private fun MilestoneBadgesCard(badges: List<BadgeState>) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
-    val badges = listOf(
-        MilestoneBadge(1, "1 Day", true, colors.accent),
-        MilestoneBadge(3, "3 Days", true, Color(0xFFB9642A)),
-        MilestoneBadge(7, "7 Days", true, Color(0xFF73777B)),
-        MilestoneBadge(14, "14 Days", false, Color(0xFF8A8A86)),
-        MilestoneBadge(30, "30 Days", false, Color(0xFF8A8A86)),
-        MilestoneBadge(60, "60 Days", false, Color(0xFF8A8A86)),
-        MilestoneBadge(90, "90 Days", false, Color(0xFF8A8A86)),
-        MilestoneBadge(180, "180 Days", false, Color(0xFF8A8A86))
-    )
 
     MilestoneSurface {
         Column(modifier = Modifier.padding(dimensions.md)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Milestone badges",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "View all",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.accent
-                )
-            }
+            Text(
+                text = "Milestone badges",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Spacer(Modifier.height(dimensions.md))
             badges.chunked(4).forEachIndexed { index, row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(dimensions.md)) {
                     row.forEach { badge ->
+                        val color = badgeColor(badge.days, badge.achieved, colors.accent)
                         BadgeTile(
                             badge = badge,
+                            color = color,
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
-                if (index == 0) {
-                    Spacer(Modifier.height(dimensions.md))
-                }
+                if (index == 0) Spacer(Modifier.height(dimensions.md))
             }
         }
     }
@@ -273,9 +271,11 @@ private fun MilestoneBadgesCard() {
 
 @Composable
 private fun BadgeTile(
-    badge: MilestoneBadge,
+    badge: BadgeState,
+    color: Color,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
     Surface(
@@ -291,7 +291,7 @@ private fun BadgeTile(
         ) {
             BadgeMedal(
                 days = badge.days.toString(),
-                color = badge.accent,
+                color = color,
                 achieved = badge.achieved,
                 modifier = Modifier.size(dimensions.navHeight)
             )
@@ -306,7 +306,7 @@ private fun BadgeTile(
             Text(
                 text = if (badge.achieved) "Achieved" else "Locked",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (badge.achieved) LocalNoContactColors.current.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (badge.achieved) colors.accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
             )
         }
@@ -314,43 +314,38 @@ private fun BadgeTile(
 }
 
 @Composable
-private fun MilestoneHistoryCard() {
+private fun MilestoneHistoryCard(history: List<MilestoneHistoryState>) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
-    val history = listOf(
-        MilestoneHistoryItem(1, "1 Day Milestone", "16 Apr 2025, 9:15 AM", "+1 day", colors.accent),
-        MilestoneHistoryItem(3, "3 Days Milestone", "18 Apr 2025, 9:20 AM", "+2 days", Color(0xFFB9642A)),
-        MilestoneHistoryItem(7, "7 Days Milestone", "22 Apr 2025, 8:45 AM", "+4 days", Color(0xFF73777B))
-    )
 
     MilestoneSurface {
         Column(modifier = Modifier.padding(dimensions.md)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Milestone history",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "View history",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.accent
-                )
-            }
+            Text(
+                text = "Milestone history",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Spacer(Modifier.height(dimensions.md))
-            history.forEachIndexed { index, item ->
-                HistoryRow(item = item)
-                if (index != history.lastIndex) {
-                    Spacer(Modifier.height(dimensions.sm))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(dimensions.xxs / 4)
-                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-                    )
-                    Spacer(Modifier.height(dimensions.sm))
+            if (history.isEmpty()) {
+                Text(
+                    text = "No milestones reached yet. Keep going!",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                history.forEachIndexed { index, item ->
+                    val color = badgeColor(item.days, true, colors.accent)
+                    HistoryRow(item = item, color = color)
+                    if (index != history.lastIndex) {
+                        Spacer(Modifier.height(dimensions.sm))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(dimensions.xxs / 4)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                        )
+                        Spacer(Modifier.height(dimensions.sm))
+                    }
                 }
             }
         }
@@ -358,7 +353,8 @@ private fun MilestoneHistoryCard() {
 }
 
 @Composable
-private fun HistoryRow(item: MilestoneHistoryItem) {
+private fun HistoryRow(item: MilestoneHistoryState, color: Color) {
+    val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
     Row(
@@ -367,7 +363,7 @@ private fun HistoryRow(item: MilestoneHistoryItem) {
     ) {
         BadgeMedal(
             days = item.days.toString(),
-            color = item.accent,
+            color = color,
             achieved = true,
             modifier = Modifier.size(dimensions.xxl + dimensions.md)
         )
@@ -381,7 +377,7 @@ private fun HistoryRow(item: MilestoneHistoryItem) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = item.date,
+                text = item.dateLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -389,13 +385,13 @@ private fun HistoryRow(item: MilestoneHistoryItem) {
             )
         }
         Surface(
-            shape = RoundedCornerShape(LocalNoContactDimensions.current.sm),
-            color = LocalNoContactColors.current.accentSoft.copy(alpha = 0.55f)
+            shape = RoundedCornerShape(dimensions.sm),
+            color = colors.accentSoft.copy(alpha = 0.55f)
         ) {
             Text(
-                text = item.delta,
+                text = item.deltaLabel,
                 style = MaterialTheme.typography.labelMedium,
-                color = LocalNoContactColors.current.accent,
+                color = colors.accent,
                 modifier = Modifier.padding(horizontal = dimensions.sm, vertical = dimensions.xs)
             )
         }
@@ -441,9 +437,10 @@ private fun ActionQuoteCard() {
 }
 
 @Composable
-private fun NextMilestoneCard() {
+private fun NextMilestoneCard(state: MilestonesUiState) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
+    val nextColor = badgeColor(state.nextMilestoneDays, false, colors.accent)
 
     MilestoneSurface {
         Row(
@@ -451,8 +448,8 @@ private fun NextMilestoneCard() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             BadgeMedal(
-                days = "30",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                days = state.nextMilestoneDays.toString(),
+                color = nextColor,
                 achieved = false,
                 modifier = Modifier.size(dimensions.navHeight + dimensions.xs)
             )
@@ -465,14 +462,18 @@ private fun NextMilestoneCard() {
                     maxLines = 1
                 )
                 Text(
-                    text = "30 Days Badge",
+                    text = "${state.nextMilestoneDays} Days Badge",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "You're 7 days away!",
+                    text = when (state.daysToNext) {
+                        0L -> "Milestone unlocked today!"
+                        1L -> "Just 1 more day!"
+                        else -> "You're ${state.daysToNext} days away!"
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -487,19 +488,19 @@ private fun NextMilestoneCard() {
             ) {
                 Row {
                     Text(
-                        text = "23",
+                        text = "${state.currentDays}",
                         style = MaterialTheme.typography.titleMedium,
                         color = colors.accent
                     )
                     Text(
-                        text = " / 30 days",
+                        text = " / ${state.nextMilestoneDays} days",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(Modifier.height(dimensions.sm))
                 LinearProgressIndicator(
-                    progress = { 23f / 30f },
+                    progress = { state.progressToNext },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(dimensions.xs)
@@ -530,20 +531,14 @@ private fun MilestoneSurface(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SoftAccentCircle(
-    color: Color,
-    size: Dp,
-    content: @Composable () -> Unit
-) {
+private fun SoftAccentCircle(color: Color, size: Dp, content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
             .background(color.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
+    ) { content() }
 }
 
 @Composable
@@ -664,16 +659,16 @@ private fun PeakMountainArt(
             path = Path().apply {
                 moveTo(size.width * 0.62f, size.height * 0.10f)
                 cubicTo(
-                    size.width * 0.72f,
-                    size.height * 0.36f,
-                    size.width * 0.46f,
-                    size.height * 0.50f,
-                    size.width * 0.55f,
-                    size.height * 0.86f
+                    size.width * 0.72f, size.height * 0.36f,
+                    size.width * 0.46f, size.height * 0.50f,
+                    size.width * 0.55f, size.height * 0.86f
                 )
             },
             color = Color.White.copy(alpha = if (dark) 0.18f else 0.42f),
-            style = Stroke(width = dimensions.xs.toPx() - dimensions.xxs.toPx() / 4f, cap = StrokeCap.Round)
+            style = Stroke(
+                width = dimensions.xs.toPx() - dimensions.xxs.toPx() / 4f,
+                cap = StrokeCap.Round
+            )
         )
         if (showFlag) {
             val poleX = size.width * 0.61f
@@ -703,6 +698,24 @@ private fun PeakMountainArt(
 @Composable
 private fun MilestonesScreenPreview() {
     NoContactTheme {
-        MilestonesScreen()
+        MilestonesScreen(
+            state = MilestonesUiState(
+                streakDisplay = "23d 7h 42m 18s",
+                currentDays = 23L,
+                badges = MilestoneTargets.mapIndexed { i, days ->
+                    BadgeState(days, "$days ${if (days == 1) "Day" else "Days"}", i < 3, if (i < 3) "22 Apr 2025, 9:00 AM" else "")
+                },
+                history = listOf(
+                    MilestoneHistoryState(7, "7 Days Milestone", "22 Apr 2025, 8:45 AM", "+4 days"),
+                    MilestoneHistoryState(3, "3 Days Milestone", "18 Apr 2025, 9:20 AM", "+2 days"),
+                    MilestoneHistoryState(1, "1 Day Milestone", "16 Apr 2025, 9:15 AM", "+1 day")
+                ),
+                nextMilestoneDays = 30,
+                progressToNext = 23f / 30f,
+                daysToNext = 7L,
+                motivationalMessage = "You're 7 days away from your next milestone!",
+                hasProfile = true
+            )
+        )
     }
 }

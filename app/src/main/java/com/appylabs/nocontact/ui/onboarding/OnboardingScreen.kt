@@ -116,7 +116,7 @@ fun OnboardingRoute(
 ) {
     val application = LocalContext.current.applicationContext as NoContactApplication
     val viewModel: OnboardingViewModel = viewModel(
-        factory = OnboardingViewModel.Factory(application.repository)
+        factory = OnboardingViewModel.Factory(application.repository, application.notificationScheduler)
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

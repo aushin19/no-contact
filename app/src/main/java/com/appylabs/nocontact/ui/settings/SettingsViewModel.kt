@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.appylabs.nocontact.data.BreakupProfileEntity
 import com.appylabs.nocontact.data.NoContactRepository
+import com.appylabs.nocontact.notification.NotificationScheduler
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,8 +15,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
-    private val repository: NoContactRepository
+    private val repository: NoContactRepository,
+    private val scheduler: NotificationScheduler
 ) : ViewModel() {
+
     val profile: StateFlow<BreakupProfileEntity?> = repository.profile.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -34,24 +37,34 @@ class SettingsViewModel(
     fun updateAffirmationTime(time: String) {
         launchSave("Affirmation notification time updated.") {
             repository.updateAffirmationTime(time)
+            if (profile.value?.notifAffirmationOn == true) {
+                scheduler.scheduleAffirmation(time)
+            }
         }
     }
 
     fun updateCheckInTime(time: String) {
         launchSave("Mood check-in reminder updated.") {
             repository.updateCheckInTime(time)
+            if (profile.value?.notifCheckinOn == true) {
+                scheduler.scheduleCheckIn(time)
+            }
         }
     }
 
     fun updateAffirmationNotifications(enabled: Boolean) {
         launchSave(if (enabled) "Affirmation notifications enabled." else "Affirmation notifications disabled.") {
             repository.updateAffirmationNotifications(enabled)
+            val time = profile.value?.notifAffirmationTime.orEmpty()
+            if (enabled) scheduler.scheduleAffirmation(time) else scheduler.cancelAffirmation()
         }
     }
 
     fun updateCheckInNotifications(enabled: Boolean) {
         launchSave(if (enabled) "Mood check-ins enabled." else "Mood check-ins disabled.") {
             repository.updateCheckInNotifications(enabled)
+            val time = profile.value?.notifCheckinTime.orEmpty()
+            if (enabled) scheduler.scheduleCheckIn(time) else scheduler.cancelCheckIn()
         }
     }
 
@@ -59,6 +72,8 @@ class SettingsViewModel(
         viewModelScope.launch {
             runCatching {
                 repository.clearProfile()
+                scheduler.cancelAffirmation()
+                scheduler.cancelCheckIn()
             }.onSuccess {
                 _events.emit(SettingsEvent.ResetComplete)
             }.onFailure {
@@ -73,10 +88,7 @@ class SettingsViewModel(
         }
     }
 
-    private fun launchSave(
-        successMessage: String,
-        block: suspend () -> Unit
-    ) {
+    private fun launchSave(successMessage: String, block: suspend () -> Unit) {
         viewModelScope.launch {
             runCatching {
                 block()
@@ -89,12 +101,13 @@ class SettingsViewModel(
     }
 
     class Factory(
-        private val repository: NoContactRepository
+        private val repository: NoContactRepository,
+        private val scheduler: NotificationScheduler
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-                return SettingsViewModel(repository) as T
+                return SettingsViewModel(repository, scheduler) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

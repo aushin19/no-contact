@@ -82,6 +82,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appylabs.nocontact.NoContactApplication
 import com.appylabs.nocontact.data.BreakupProfileEntity
+import com.appylabs.nocontact.data.JournalEntryEntity
 import com.appylabs.nocontact.data.NoContactRepository
 import com.appylabs.nocontact.ui.theme.LocalNoContactColors
 import com.appylabs.nocontact.ui.theme.LocalNoContactDimensions
@@ -106,7 +107,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    onOpenSos: () -> Unit = {}
+    onOpenSos: () -> Unit = {},
+    onOpenJournal: () -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as NoContactApplication
     val viewModel: HomeViewModel = viewModel(
@@ -144,9 +146,7 @@ fun HomeScreen(
             onInsightClick = {
                 viewModel.showMessage(uiState.reasonAnchor)
             },
-            onJournalClick = {
-                viewModel.showMessage("Journal entries will appear here after the journal database is added.")
-            },
+            onJournalClick = onOpenJournal,
             onMilestoneClick = {
                 viewModel.showMessage(uiState.milestoneMessage)
             }
@@ -190,13 +190,15 @@ class HomeViewModel(
         repository.profile,
         nowMillis,
         affirmationOffset,
-        savedAffirmations
-    ) { profile, now, offset, saved ->
+        savedAffirmations,
+        repository.recentJournalEntries(2)
+    ) { profile, now, offset, saved, recent ->
         buildHomeUiState(
             profile = profile,
             nowMillis = now,
             affirmationOffset = offset,
-            savedAffirmations = saved
+            savedAffirmations = saved,
+            recentEntries = recent
         )
     }.stateIn(
         scope = viewModelScope,
@@ -205,7 +207,8 @@ class HomeViewModel(
             profile = null,
             nowMillis = System.currentTimeMillis(),
             affirmationOffset = 0,
-            savedAffirmations = emptySet()
+            savedAffirmations = emptySet(),
+            recentEntries = emptyList()
         )
     )
 
@@ -274,7 +277,8 @@ data class HomeUiState(
     val milestoneProgress: Float,
     val daysToMilestone: Int,
     val milestoneMessage: String,
-    val statsMessage: String
+    val statsMessage: String,
+    val recentEntries: List<JournalEntryEntity> = emptyList()
 )
 
 data class StreakTime(
@@ -343,7 +347,8 @@ private fun buildHomeUiState(
     profile: BreakupProfileEntity?,
     nowMillis: Long,
     affirmationOffset: Int,
-    savedAffirmations: Set<String>
+    savedAffirmations: Set<String>,
+    recentEntries: List<JournalEntryEntity> = emptyList()
 ): HomeUiState {
     val streak = calculateStreak(profile?.ncStartDateMillis, nowMillis)
     val todayKey = formatDayKey(nowMillis)
@@ -390,7 +395,8 @@ private fun buildHomeUiState(
         } else {
             "$daysLeft days until your $target day milestone."
         },
-        statsMessage = "Current streak: ${streak.days} days, ${streak.hours} hours. Goal: $target days."
+        statsMessage = "Current streak: ${streak.days} days, ${streak.hours} hours. Goal: $target days.",
+        recentEntries = recentEntries
     )
 }
 
@@ -481,7 +487,7 @@ private fun HomeContent(
                 onClick = onInsightClick
             )
         }
-        item { JournalEntriesCard(onClick = onJournalClick) }
+        item { JournalEntriesCard(entries = state.recentEntries, onClick = onJournalClick) }
         item {
             MilestoneCard(
                 state = state,
@@ -928,7 +934,7 @@ private fun InsightCard(
 }
 
 @Composable
-private fun JournalEntriesCard(onClick: () -> Unit) {
+private fun JournalEntriesCard(entries: List<JournalEntryEntity>, onClick: () -> Unit) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
@@ -960,21 +966,47 @@ private fun JournalEntriesCard(onClick: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(dimensions.sm))
-            JournalEntryRow(
-                title = "Tough day, but I stayed strong",
-                meta = "Today, 9:15 PM - Hopeful",
-                onClick = onClick
-            )
-            HorizontalDivider(
-                modifier = Modifier.padding(start = dimensions.navHeight, end = dimensions.md),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-            JournalEntryRow(
-                title = "Small wins are still wins",
-                meta = "Yesterday, 7:45 PM - Grateful",
-                onClick = onClick
-            )
+            if (entries.isEmpty()) {
+                Text(
+                    text = "No entries yet. Tap Journal to start writing.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = dimensions.md, vertical = dimensions.sm)
+                )
+            } else {
+                entries.forEachIndexed { index, entry ->
+                    val meta = buildString {
+                        append(formatHomeEntryDate(entry.createdAtMillis))
+                        if (entry.mood.isNotBlank()) append(" - ${entry.mood}")
+                    }
+                    JournalEntryRow(
+                        title = entry.title.ifBlank { "Untitled entry" },
+                        meta = meta,
+                        onClick = onClick
+                    )
+                    if (index != entries.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = dimensions.navHeight, end = dimensions.md),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
+                }
+            }
         }
+    }
+}
+
+private fun formatHomeEntryDate(millis: Long): String {
+    val entryDay = Calendar.getInstance().apply { timeInMillis = millis }
+    val today = Calendar.getInstance()
+    val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+    fun Calendar.isSameDay(other: Calendar) =
+        get(Calendar.YEAR) == other.get(Calendar.YEAR) && get(Calendar.DAY_OF_YEAR) == other.get(Calendar.DAY_OF_YEAR)
+    val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
+    return when {
+        entryDay.isSameDay(today) -> "Today, $time"
+        entryDay.isSameDay(yesterday) -> "Yesterday, $time"
+        else -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(millis))
     }
 }
 

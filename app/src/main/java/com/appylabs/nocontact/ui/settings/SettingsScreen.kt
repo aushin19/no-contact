@@ -1,5 +1,9 @@
 package com.appylabs.nocontact.ui.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,20 +89,39 @@ fun SettingsRoute(
 ) {
     val application = LocalContext.current.applicationContext as NoContactApplication
     val viewModel: SettingsViewModel = viewModel(
-        factory = SettingsViewModel.Factory(application.repository)
+        factory = SettingsViewModel.Factory(application.repository, application.notificationScheduler)
     )
     val profile by viewModel.profile.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // Pending notification action to execute once permission is granted
+    var pendingNotificationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            pendingNotificationAction?.invoke()
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Notification permission denied.") }
+        }
+        pendingNotificationAction = null
+    }
+
+    fun withNotificationPermission(action: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pendingNotificationAction = action
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            action()
+        }
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
-                is SettingsEvent.Message -> {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(event.text)
-                    }
-                }
+                is SettingsEvent.Message -> scope.launch { snackbarHostState.showSnackbar(event.text) }
                 SettingsEvent.ResetComplete -> onResetFinished()
             }
         }
@@ -110,8 +133,20 @@ fun SettingsRoute(
             onStartDateChange = viewModel::updateNoContactStartDate,
             onAffirmationTimeChange = viewModel::updateAffirmationTime,
             onCheckInTimeChange = viewModel::updateCheckInTime,
-            onAffirmationNotificationsChange = viewModel::updateAffirmationNotifications,
-            onCheckInNotificationsChange = viewModel::updateCheckInNotifications,
+            onAffirmationNotificationsChange = { enabled ->
+                if (enabled) {
+                    withNotificationPermission { viewModel.updateAffirmationNotifications(true) }
+                } else {
+                    viewModel.updateAffirmationNotifications(false)
+                }
+            },
+            onCheckInNotificationsChange = { enabled ->
+                if (enabled) {
+                    withNotificationPermission { viewModel.updateCheckInNotifications(true) }
+                } else {
+                    viewModel.updateCheckInNotifications(false)
+                }
+            },
             onPlaceholder = viewModel::showPlaceholder,
             onResetAllData = viewModel::resetAllData
         )

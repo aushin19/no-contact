@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.appylabs.nocontact.data.NoContactRepository
+import com.appylabs.nocontact.notification.NotificationScheduler
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -14,7 +15,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class OnboardingViewModel(
-    private val repository: NoContactRepository
+    private val repository: NoContactRepository,
+    private val scheduler: NotificationScheduler
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
@@ -106,6 +108,8 @@ class OnboardingViewModel(
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             runCatching {
                 repository.saveProfile(snapshot.toBreakupProfileEntity(System.currentTimeMillis()))
+                scheduler.scheduleAffirmation(snapshot.affirmationTime)
+                scheduler.scheduleCheckIn(snapshot.checkinTime)
             }.onSuccess {
                 _events.emit(OnboardingEvent.ProfileSaved)
             }.onFailure {
@@ -124,12 +128,13 @@ class OnboardingViewModel(
     }
 
     class Factory(
-        private val repository: NoContactRepository
+        private val repository: NoContactRepository,
+        private val scheduler: NotificationScheduler
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(OnboardingViewModel::class.java)) {
-                return OnboardingViewModel(repository) as T
+                return OnboardingViewModel(repository, scheduler) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
