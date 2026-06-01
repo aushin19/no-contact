@@ -32,6 +32,12 @@ interface BreakupProfileDao {
     @Query("UPDATE breakup_profile SET notif_checkin_on = :enabled WHERE id = 1")
     suspend fun updateCheckInNotifications(enabled: Boolean)
 
+    @Query("UPDATE breakup_profile SET breakup_type = :type WHERE id = 1")
+    suspend fun updateBreakupType(type: String)
+
+    @Query("UPDATE breakup_profile SET dark_mode_override = :override WHERE id = 1")
+    suspend fun updateDarkMode(override: Int?)
+
     @Query("DELETE FROM breakup_profile WHERE id = 1")
     suspend fun clearProfile()
 }

@@ -1,7 +1,6 @@
 package com.appylabs.nocontact.ui.sos
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +40,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,15 +51,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -74,10 +77,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appylabs.nocontact.NoContactApplication
 import com.appylabs.nocontact.data.BreakupProfileEntity
 import com.appylabs.nocontact.data.NoContactRepository
+import com.appylabs.nocontact.data.SosSessionEntity
+import com.appylabs.nocontact.data.StreakLogEntity
 import com.appylabs.nocontact.ui.theme.LocalNoContactColors
 import com.appylabs.nocontact.ui.theme.LocalNoContactDimensions
 import com.appylabs.nocontact.ui.theme.NoContactTheme
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -99,8 +103,7 @@ fun SosScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSlipDialog by remember { mutableStateOf(false) }
-    var remainingSeconds by remember { mutableIntStateOf(TotalBreathingSeconds) }
-    var isBreathing by remember { mutableStateOf(false) }
+    val openedAtMillis = remember { System.currentTimeMillis() }
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -110,21 +113,13 @@ fun SosScreen(
         }
     }
 
-    LaunchedEffect(isBreathing, remainingSeconds) {
-        if (isBreathing && remainingSeconds > 0) {
-            delay(TimeUnit.SECONDS.toMillis(1))
-            remainingSeconds -= 1
-        }
-    }
+    fun elapsedSeconds() = ((System.currentTimeMillis() - openedAtMillis) / 1000).toInt()
 
     SosContent(
         state = state,
-        remainingSeconds = remainingSeconds,
-        isBreathing = isBreathing,
         onBack = onBack,
         onEndSos = onBack,
-        onStartBreathing = { isBreathing = !isBreathing },
-        onResisted = onBack,
+        onResisted = { viewModel.resistedUrge(state.triggerTagsCsv, elapsedSeconds()) },
         onSlipped = { showSlipDialog = true },
         modifier = modifier
     )
@@ -149,7 +144,7 @@ fun SosScreen(
                 TextButton(
                     onClick = {
                         showSlipDialog = false
-                        viewModel.resetStreakAfterSlip()
+                        viewModel.resetStreakAfterSlip(state.triggerTagsCsv, elapsedSeconds())
                     }
                 ) {
                     Text("Reset streak", color = LocalNoContactColors.current.accent)
@@ -178,9 +173,47 @@ private class SosViewModel(
     private val _events = MutableSharedFlow<SosEvent>()
     val events = _events.asSharedFlow()
 
-    fun resetStreakAfterSlip() {
+    fun resistedUrge(triggerTagsCsv: String, durationSeconds: Int) {
         viewModelScope.launch {
-            repository.updateNoContactStartDate(System.currentTimeMillis())
+            repository.saveSosSession(
+                SosSessionEntity(
+                    triggerTags = triggerTagsCsv,
+                    outcome = "RESISTED",
+                    durationSeconds = durationSeconds,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+            _events.emit(SosEvent.NavigateBack)
+        }
+    }
+
+    fun resetStreakAfterSlip(triggerTagsCsv: String, durationSeconds: Int) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val profile = repository.getProfileOnce()
+            if (profile != null) {
+                val streakStart = profile.ncStartDateMillis
+                val streakDays = TimeUnit.MILLISECONDS.toDays((now - streakStart).coerceAtLeast(0L)).toInt()
+                repository.saveStreakLog(
+                    StreakLogEntity(
+                        streakStart = streakStart,
+                        streakEnd = now,
+                        streakDays = streakDays,
+                        reasonTag = triggerTagsCsv.split(",").firstOrNull(),
+                        note = null,
+                        createdAt = now
+                    )
+                )
+            }
+            repository.saveSosSession(
+                SosSessionEntity(
+                    triggerTags = triggerTagsCsv,
+                    outcome = "RELAPSED",
+                    durationSeconds = durationSeconds,
+                    createdAt = now
+                )
+            )
+            repository.updateNoContactStartDate(now)
             _events.emit(SosEvent.NavigateBack)
         }
     }
@@ -206,6 +239,7 @@ private data class SosUiState(
     val reasonAnchor: String,
     val pledgeText: String,
     val triggerLabels: List<String>,
+    val triggerTagsCsv: String,
     val riskLabel: String,
     val dangerTimeLabel: String,
     val affirmation: String,
@@ -215,36 +249,37 @@ private data class SosUiState(
 @Composable
 private fun SosContent(
     state: SosUiState,
-    remainingSeconds: Int,
-    isBreathing: Boolean,
     onBack: () -> Unit,
     onEndSos: () -> Unit,
-    onStartBreathing: () -> Unit,
     onResisted: () -> Unit,
     onSlipped: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalNoContactDimensions.current
 
-    LazyColumn(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-        contentPadding = PaddingValues(
-            start = dimensions.screenPadding,
-            top = dimensions.md,
-            end = dimensions.screenPadding,
-            bottom = dimensions.md
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimensions.sm)
     ) {
-        item {
-            SosTopBar(
-                onBack = onBack,
-                onEndSos = onEndSos
-            )
-        }
+        SosTopBar(
+            onBack = onBack,
+            onEndSos = onEndSos,
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = dimensions.xs, vertical = dimensions.xs)
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = dimensions.screenPadding,
+                top = dimensions.xs,
+                end = dimensions.screenPadding,
+                bottom = dimensions.md
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimensions.sm)
+        ) {
         item {
             SosHero()
         }
@@ -252,12 +287,7 @@ private fun SosContent(
             UrgeNoticeCard(state = state)
         }
         item {
-            BreathingCard(
-                state = state,
-                remainingSeconds = remainingSeconds,
-                isBreathing = isBreathing,
-                onStartBreathing = onStartBreathing
-            )
+            BreathingCard(state = state)
         }
         item {
             ReminderSection(state = state)
@@ -277,19 +307,21 @@ private fun SosContent(
                 streakDays = state.streakDays
             )
         }
-    }
+        }
+    } // end Column
 }
 
 @Composable
 private fun SosTopBar(
     onBack: () -> Unit,
-    onEndSos: () -> Unit
+    onEndSos: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack) {
@@ -413,68 +445,201 @@ private fun UrgeNoticeCard(state: SosUiState) {
     }
 }
 
+private enum class BreathPhase { IDLE, INHALE, HOLD, EXHALE, DONE }
+
 @Composable
-private fun BreathingCard(
-    state: SosUiState,
-    remainingSeconds: Int,
-    isBreathing: Boolean,
-    onStartBreathing: () -> Unit
-) {
+private fun rememberIsReduceMotionEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) < 0.5f
+    }
+}
+
+@Composable
+private fun BreathingCard(state: SosUiState) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
-    val elapsed = (TotalBreathingSeconds - remainingSeconds).coerceIn(0, TotalBreathingSeconds)
-    val progress = elapsed / TotalBreathingSeconds.toFloat()
+    val reduceMotion = rememberIsReduceMotionEnabled()
+
+    var phase by remember { mutableStateOf(BreathPhase.IDLE) }
+    var roundsDone by remember { mutableIntStateOf(0) }
+    val totalRounds = 3
+    val isActive = phase != BreathPhase.IDLE && phase != BreathPhase.DONE
+
+    // 4-7-8 phase timer — auto-advances and counts rounds
+    LaunchedEffect(phase) {
+        val durationMs: Long = when (phase) {
+            BreathPhase.INHALE -> 4_000L
+            BreathPhase.HOLD   -> 7_000L
+            BreathPhase.EXHALE -> 8_000L
+            else               -> return@LaunchedEffect
+        }
+        delay(durationMs)
+        phase = when (phase) {
+            BreathPhase.INHALE -> BreathPhase.HOLD
+            BreathPhase.HOLD   -> BreathPhase.EXHALE
+            BreathPhase.EXHALE -> {
+                val next = roundsDone + 1
+                roundsDone = next
+                if (next < totalRounds) BreathPhase.INHALE else BreathPhase.DONE
+            }
+            else -> phase
+        }
+    }
+
+    // Circle expands on INHALE/HOLD, contracts on EXHALE/IDLE/DONE
+    val minCircle = 80.dp
+    val maxCircle = 200.dp
+    val targetCircle: Dp = when (phase) {
+        BreathPhase.INHALE, BreathPhase.HOLD -> maxCircle
+        else                                  -> minCircle
+    }
+    val circleSize by animateDpAsState(
+        targetValue = targetCircle,
+        animationSpec = if (reduceMotion) snap() else spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "breathingCircle"
+    )
+
+    val phaseLabel = when (phase) {
+        BreathPhase.IDLE   -> "Breathe with me"
+        BreathPhase.INHALE -> "Inhale..."
+        BreathPhase.HOLD   -> "Hold..."
+        BreathPhase.EXHALE -> "Exhale..."
+        BreathPhase.DONE   -> "Well done"
+    }
+    val phaseSub = when (phase) {
+        BreathPhase.IDLE -> "4 · 7 · 8  ·  $totalRounds rounds"
+        BreathPhase.DONE -> "You rode it out."
+        else             -> "Round ${roundsDone + 1} of $totalRounds"
+    }
 
     SosCard {
-        Column(modifier = Modifier.padding(dimensions.md)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimensions.md),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             SectionLabel("RIDE OUT THE URGE")
-            Spacer(Modifier.height(dimensions.md))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CountdownRing(
-                    progress = progress,
-                    timeText = formatRemaining(remainingSeconds),
-                    modifier = Modifier.size(dimensions.navHeight * 2 + dimensions.xxl)
+            Spacer(Modifier.height(dimensions.lg))
+
+            // Fixed-height container prevents card reflow during animation
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Outer glow ring
+                Box(
+                    modifier = Modifier
+                        .size(circleSize * 1.25f)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    colors.accent.copy(alpha = if (isActive) 0.12f else 0.05f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 )
-                Spacer(Modifier.width(dimensions.xl))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Take 5 deep breaths",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(dimensions.sm))
-                    Text(
-                        text = "Focus on your breath.\nYou don't have to ${state.riskLabel}.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(dimensions.md))
-                    Button(
-                        onClick = onStartBreathing,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.accentSoft,
-                            contentColor = colors.accent
+                // Main breathing circle
+                Box(
+                    modifier = Modifier
+                        .size(circleSize)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    colors.accent.copy(alpha = if (isActive) 0.45f else 0.15f),
+                                    colors.accent.copy(alpha = if (isActive) 0.15f else 0.05f)
+                                )
+                            )
                         ),
-                        contentPadding = PaddingValues(
-                            horizontal = dimensions.md,
-                            vertical = dimensions.xs
-                        )
-                    ) {
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (phase == BreathPhase.DONE) {
                         Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
+                            imageVector = Icons.Rounded.CheckCircleOutline,
                             contentDescription = null,
-                            modifier = Modifier.size(dimensions.icon)
-                        )
-                        Spacer(Modifier.width(dimensions.xs))
-                        Text(
-                            text = if (isBreathing) "Pause Breathing" else "Start Breathing",
-                            style = MaterialTheme.typography.titleMedium
+                            tint = colors.accent,
+                            modifier = Modifier.size(36.dp)
                         )
                     }
                 }
             }
+
+            Spacer(Modifier.height(dimensions.md))
+
+            Text(
+                text = phaseLabel,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (isActive || phase == BreathPhase.DONE) colors.accent
+                        else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(dimensions.xxs))
+            Text(
+                text = phaseSub,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(dimensions.lg))
+
+            Button(
+                onClick = {
+                    when (phase) {
+                        BreathPhase.IDLE, BreathPhase.DONE -> {
+                            roundsDone = 0
+                            phase = BreathPhase.INHALE
+                        }
+                        else -> phase = BreathPhase.IDLE
+                    }
+                },
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.accentSoft,
+                    contentColor = colors.accent
+                ),
+                contentPadding = PaddingValues(
+                    horizontal = dimensions.md,
+                    vertical = dimensions.xs
+                )
+            ) {
+                Icon(
+                    imageVector = if (isActive) Icons.Rounded.Close else Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(dimensions.icon)
+                )
+                Spacer(Modifier.width(dimensions.xs))
+                Text(
+                    text = when (phase) {
+                        BreathPhase.IDLE -> "Start Breathing"
+                        BreathPhase.DONE -> "Breathe Again"
+                        else             -> "Stop"
+                    },
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(Modifier.height(dimensions.sm))
+            Text(
+                text = "You don't have to ${state.riskLabel}.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -814,60 +979,6 @@ private fun IconCircle(
     }
 }
 
-@Composable
-private fun CountdownRing(
-    progress: Float,
-    timeText: String,
-    modifier: Modifier = Modifier
-) {
-    val colors = LocalNoContactColors.current
-    val dimensions = LocalNoContactDimensions.current
-    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = dimensions.sm.toPx()
-            val arcSize = size.minDimension - strokeWidth
-            val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
-            drawCircle(
-                color = Color.White.copy(alpha = 0.08f),
-                radius = size.minDimension / 2f
-            )
-            drawArc(
-                color = trackColor,
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = colors.accent,
-                startAngle = -90f,
-                sweepAngle = 360f * progress,
-                useCenter = false,
-                topLeft = topLeft,
-                size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = timeText,
-                style = MaterialTheme.typography.displayMedium,
-                color = colors.accent,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "minutes left",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
 private fun buildSosUiState(profile: BreakupProfileEntity?): SosUiState {
     val streakDays = profile?.ncStartDateMillis?.let { start ->
         TimeUnit.MILLISECONDS.toDays((System.currentTimeMillis() - start).coerceAtLeast(0L))
@@ -884,6 +995,7 @@ private fun buildSosUiState(profile: BreakupProfileEntity?): SosUiState {
         pledgeText = profile?.pledgeText?.takeIf { it.isNotBlank() }
             ?: "Today, I protect my peace.",
         triggerLabels = triggers,
+        triggerTagsCsv = profile?.triggerTagsCsv ?: "",
         riskLabel = contactRiskLabel(profile?.contactRisk),
         dangerTimeLabel = dangerTimeLabel(profile?.dangerTimeWindow),
         affirmation = affirmationFor(profile?.affirmationStyle, profile?.breakupType),
@@ -927,27 +1039,26 @@ private fun dangerTimeLabel(raw: String?): String {
 }
 
 private fun affirmationFor(style: String?, breakupType: String?): String {
-    return when (style) {
-        "DIRECT" -> "You are stronger than this moment."
-        "TOUGH_LOVE" -> "The pattern ends when you stop feeding it."
-        "LOGICAL" -> "An urge is a signal, not an instruction."
-        "SPIRITUAL" -> "Release what keeps pulling you from yourself."
-        else -> when (breakupType) {
-            "GHOSTED" -> "You do not need to chase clarity."
-            "TOXIC" -> "Your safety matters more than one reply."
-            "DIVORCE" -> "You can rebuild one honest day at a time."
-            else -> "You are stronger than this moment."
-        }
+    // Style takes priority — tonal match to what user set during onboarding
+    val byStyle = when (style) {
+        "GENTLE" -> "It is okay to feel this. It does not have to become an action."
+        "DIRECT" -> "Do not trade your peace for one more message."
+        "TOUGH_LOVE" -> "The pattern ends when you stop feeding it. That moment is now."
+        "LOGICAL" -> "An urge is a signal, not an instruction. Signals pass."
+        "SPIRITUAL" -> "Release what keeps pulling you from yourself. You are already whole."
+        else -> null
+    }
+    if (byStyle != null) return byStyle
+    // Fall back to breakup-type-specific affirmation
+    return when (breakupType) {
+        "TOXIC" -> "Your safety matters more than one reply. Stay gone."
+        "GHOSTED" -> "You do not need to chase clarity. You already have your answer."
+        "MUTUAL" -> "Missing them is real. Going back will not fix the missing."
+        "DIVORCE" -> "You can rebuild one honest day at a time. This is that day."
+        else -> "The urge will pass. Your self-respect will remain."
     }
 }
 
-private fun formatRemaining(seconds: Int): String {
-    val minutesPart = seconds / TimeUnit.MINUTES.toSeconds(1).toInt()
-    val secondsPart = seconds % TimeUnit.MINUTES.toSeconds(1).toInt()
-    return String.format(Locale.US, "%02d:%02d", minutesPart, secondsPart)
-}
-
-private const val TotalBreathingSeconds = 5 * 60
 
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
@@ -958,16 +1069,14 @@ private fun SosScreenPreview() {
                 reasonAnchor = "Why no contact matters",
                 pledgeText = "Positive reminders to stay strong",
                 triggerLabels = listOf("Late night and alone", "Saw their profile"),
+                triggerTagsCsv = "LATE_NIGHT,PROFILE",
                 riskLabel = "check their profile",
                 dangerTimeLabel = "late night",
                 affirmation = "You are stronger than this moment.",
                 streakDays = 23
             ),
-            remainingSeconds = 272,
-            isBreathing = false,
             onBack = {},
             onEndSos = {},
-            onStartBreathing = {},
             onResisted = {},
             onSlipped = {}
         )

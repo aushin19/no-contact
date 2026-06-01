@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import com.appylabs.nocontact.ui.theme.IconJournalBook
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LocalFireDepartment
@@ -28,7 +28,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,7 +44,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.appylabs.nocontact.MainActivity
 import com.appylabs.nocontact.ui.home.HomeScreen
+import com.appylabs.nocontact.ui.journal.JournalDetailRoute
 import com.appylabs.nocontact.ui.journal.JournalEditorRoute
 import com.appylabs.nocontact.ui.journal.JournalRoute
 import com.appylabs.nocontact.ui.milestones.MilestonesRoute
@@ -57,7 +64,7 @@ private object AppRoute {
     const val Journal = "journal"
     const val Milestones = "milestones"
     const val Settings = "settings"
-    const val JournalNew = "journal/new"
+    const val JournalDetail = "journal/detail"
     const val JournalEdit = "journal/edit"
 }
 
@@ -69,19 +76,50 @@ private data class BottomDestination(
 
 private val BottomDestinations = listOf(
     BottomDestination(AppRoute.Home, "Home", Icons.Rounded.Home),
-    BottomDestination(AppRoute.Journal, "Journal", Icons.AutoMirrored.Rounded.MenuBook),
+    BottomDestination(AppRoute.Journal, "Journal", IconJournalBook),
     BottomDestination(AppRoute.Milestones, "Milestones", Icons.Rounded.EmojiEvents),
     BottomDestination(AppRoute.Settings, "Settings", Icons.Rounded.Settings)
 )
 
 @Composable
-fun NoContactApp() {
+fun NoContactApp(
+    pendingDestination: String? = null,
+    onDestinationConsumed: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val bottomSelectedRoute = if (currentRoute == AppRoute.Sos) AppRoute.Home else currentRoute
-    val showBottomBar = BottomDestinations.any { it.route == bottomSelectedRoute } || currentRoute == AppRoute.Sos
+    val fullScreenRoutes = setOf(AppRoute.JournalDetail, AppRoute.JournalEdit)
+    val isFullScreen = fullScreenRoutes.any { currentRoute?.startsWith(it) == true }
+    val showBottomBar = !isFullScreen && (BottomDestinations.any { it.route == bottomSelectedRoute } || currentRoute == AppRoute.Sos)
     val dimensions = LocalNoContactDimensions.current
+
+    // Increments each time a DEST_HOME_MOOD notification is tapped — HomeScreen watches this
+    var moodSheetTrigger by remember { mutableIntStateOf(0) }
+
+    // Handle notification deep links — only after Splash has resolved to a real screen
+    LaunchedEffect(pendingDestination, currentRoute) {
+        val dest = pendingDestination ?: return@LaunchedEffect
+        // Wait until NavHost has settled past Splash/Onboarding
+        if (currentRoute == null ||
+            currentRoute == AppRoute.Splash ||
+            currentRoute == AppRoute.Onboarding) return@LaunchedEffect
+
+        val targetRoute = when (dest) {
+            MainActivity.DEST_HOME, MainActivity.DEST_HOME_MOOD -> AppRoute.Home
+            MainActivity.DEST_MILESTONES -> AppRoute.Milestones
+            else -> null
+        } ?: run { onDestinationConsumed(); return@LaunchedEffect }
+
+        navController.navigate(targetRoute) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+        if (dest == MainActivity.DEST_HOME_MOOD) moodSheetTrigger++
+        onDestinationConsumed()
+    }
 
     Scaffold(
         modifier = Modifier
@@ -138,6 +176,7 @@ fun NoContactApp() {
             composable(AppRoute.Home) {
                 HomeScreen(
                     modifier = Modifier.padding(innerPadding),
+                    moodSheetTrigger = moodSheetTrigger,
                     onOpenSos = {
                         navController.navigate(AppRoute.Sos) {
                             launchSingleTop = true
@@ -145,6 +184,15 @@ fun NoContactApp() {
                     },
                     onOpenJournal = {
                         navController.navigate(AppRoute.Journal) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onOpenMilestones = {
+                        navController.navigate(AppRoute.Milestones) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -163,14 +211,15 @@ fun NoContactApp() {
             composable(AppRoute.Journal) {
                 JournalRoute(
                     modifier = Modifier.padding(innerPadding),
-                    onNewEntry = { navController.navigate(AppRoute.JournalNew) },
-                    onOpenEntry = { id -> navController.navigate("${AppRoute.JournalEdit}/$id") }
+                    onOpenEntry = { id -> navController.navigate("${AppRoute.JournalDetail}/$id") }
                 )
             }
-            composable(AppRoute.JournalNew) {
-                JournalEditorRoute(
-                    entryId = null,
-                    onBack = { navController.popBackStack() }
+            composable("${AppRoute.JournalDetail}/{id}") { backStackEntry ->
+                val id = backStackEntry.arguments?.getString("id")?.toIntOrNull() ?: return@composable
+                JournalDetailRoute(
+                    entryId = id,
+                    onBack = { navController.popBackStack() },
+                    onEdit = { entryId -> navController.navigate("${AppRoute.JournalEdit}/$entryId") }
                 )
             }
             composable("${AppRoute.JournalEdit}/{id}") { backStackEntry ->
@@ -214,6 +263,7 @@ private fun SplashRoute(
         } else {
             AppRoute.Home
         }
+        delay(3_000)
         onFinished(route)
     }
 
@@ -261,9 +311,7 @@ private fun NoContactBottomBar(
     val dimensions = LocalNoContactDimensions.current
 
     NavigationBar(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(dimensions.navHeight),
+        modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = dimensions.xxs - dimensions.xxs
     ) {
@@ -276,17 +324,14 @@ private fun NoContactBottomBar(
                     Icon(
                         imageVector = destination.icon,
                         contentDescription = destination.label,
-                        modifier = Modifier.size(dimensions.icon)
+                        modifier = Modifier.size(dimensions.iconLarge)
                     )
                 },
-                label = { Text(destination.label) },
-                alwaysShowLabel = true,
+                alwaysShowLabel = false,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = colors.accent,
-                    selectedTextColor = colors.accent,
-                    indicatorColor = Color.Transparent,
-                    unselectedIconColor = colors.navInactive,
-                    unselectedTextColor = colors.navInactive
+                    indicatorColor = colors.accentSoft.copy(alpha = 0.55f),
+                    unselectedIconColor = colors.navInactive
                 )
             )
         }

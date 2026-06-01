@@ -85,34 +85,42 @@ fun MilestonesRoute(modifier: Modifier = Modifier) {
 private fun MilestonesScreen(state: MilestonesUiState, modifier: Modifier = Modifier) {
     val dimensions = LocalNoContactDimensions.current
 
-    LazyColumn(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-        contentPadding = PaddingValues(
-            start = dimensions.screenPadding,
-            top = dimensions.md,
-            end = dimensions.screenPadding,
-            bottom = dimensions.xxl
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimensions.md)
     ) {
-        item { MilestonesHeader() }
-        item { CurrentStreakCard(state = state) }
-        item { MilestoneBadgesCard(badges = state.badges) }
-        item { MilestoneHistoryCard(history = state.history) }
-        item { ActionQuoteCard() }
-        item { NextMilestoneCard(state = state) }
+        MilestonesHeader(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = dimensions.screenPadding, vertical = dimensions.sm)
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = dimensions.screenPadding,
+                top = dimensions.xs,
+                end = dimensions.screenPadding,
+                bottom = dimensions.xxl
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimensions.md)
+        ) {
+            item { CurrentStreakCard(state = state) }
+            item { MilestoneBadgesCard(badges = state.badges) }
+            item { MilestoneHistoryCard(history = state.history) }
+            item { ActionQuoteCard() }
+            item { NextMilestoneCard(state = state) }
+        }
     }
 }
 
 @Composable
-private fun MilestonesHeader() {
+private fun MilestonesHeader(modifier: Modifier = Modifier) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
-    Column {
+    Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -298,17 +306,30 @@ private fun BadgeTile(
             Spacer(Modifier.height(dimensions.xs))
             Text(
                 text = badge.label,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
-            Text(
-                text = if (badge.achieved) "Achieved" else "Locked",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (badge.achieved) colors.accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
+            if (badge.achieved) {
+                Text(
+                    text = badge.achievedDateLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                Text(
+                    text = "Locked",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
@@ -703,7 +724,13 @@ private fun MilestonesScreenPreview() {
                 streakDisplay = "23d 7h 42m 18s",
                 currentDays = 23L,
                 badges = MilestoneTargets.mapIndexed { i, days ->
-                    BadgeState(days, "$days ${if (days == 1) "Day" else "Days"}", i < 3, if (i < 3) "22 Apr 2025, 9:00 AM" else "")
+                    BadgeState(
+                        days = days,
+                        label = "$days ${if (days == 1) "Day" else "Days"}",
+                        achieved = i < 3,
+                        achievedDateLabel = if (i < 3) "22 Apr 2025" else "",
+                        achievedAtMillis = if (i < 3) System.currentTimeMillis() - (i * 86_400_000L) else 0L
+                    )
                 },
                 history = listOf(
                     MilestoneHistoryState(7, "7 Days Milestone", "22 Apr 2025, 8:45 AM", "+4 days"),

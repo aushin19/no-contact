@@ -26,5 +26,6 @@ data class BreakupProfileEntity(
     @ColumnInfo(name = "widget_preference") val widgetPreference: String,
     @ColumnInfo(name = "practice_trigger_tag") val practiceTriggerTag: String,
     @ColumnInfo(name = "practice_completed_at_millis") val practiceCompletedAtMillis: Long,
+    @ColumnInfo(name = "dark_mode_override") val darkModeOverride: Int? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long
 )

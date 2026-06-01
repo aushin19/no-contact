@@ -1,6 +1,7 @@
 package com.appylabs.nocontact.ui.journal
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,23 +13,33 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EmojiObjects
+import androidx.compose.material.icons.rounded.SentimentDissatisfied
+import androidx.compose.material.icons.rounded.SentimentNeutral
+import androidx.compose.material.icons.rounded.SentimentSatisfied
+import androidx.compose.material.icons.rounded.SentimentSatisfiedAlt
+import androidx.compose.material.icons.rounded.SentimentVeryDissatisfied
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,8 +51,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,6 +63,19 @@ import com.appylabs.nocontact.NoContactApplication
 import com.appylabs.nocontact.ui.theme.LocalNoContactColors
 import com.appylabs.nocontact.ui.theme.LocalNoContactDimensions
 import com.appylabs.nocontact.ui.theme.NoContactTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+internal data class SimpleMood(val label: String, val icon: ImageVector)
+
+internal val SimpleMoods = listOf(
+    SimpleMood("Very Bad", Icons.Rounded.SentimentVeryDissatisfied),
+    SimpleMood("Bad", Icons.Rounded.SentimentDissatisfied),
+    SimpleMood("Neutral", Icons.Rounded.SentimentNeutral),
+    SimpleMood("Good", Icons.Rounded.SentimentSatisfied),
+    SimpleMood("Very Good", Icons.Rounded.SentimentSatisfiedAlt)
+)
 
 @Composable
 fun JournalEditorRoute(
@@ -76,7 +103,7 @@ fun JournalEditorRoute(
 
     val isDirty = state.title.isNotBlank() || state.body.isNotBlank()
 
-    BackHandler(enabled = isDirty && !state.isExistingEntry) {
+    BackHandler(enabled = isDirty) {
         showDiscardDialog = true
     }
 
@@ -87,7 +114,7 @@ fun JournalEditorRoute(
         onMoodChange = viewModel::onMoodChange,
         onSave = viewModel::save,
         onBack = {
-            if (isDirty && !state.isExistingEntry) showDiscardDialog = true else onBack()
+            if (isDirty) showDiscardDialog = true else onBack()
         },
         onDeleteClick = { showDeleteDialog = true },
         modifier = modifier
@@ -96,8 +123,8 @@ fun JournalEditorRoute(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Discard entry?") },
-            text = { Text("You haven't saved this entry. Discard it?") },
+            title = { Text(if (state.isExistingEntry) "Discard changes?" else "Discard entry?") },
+            text = { Text(if (state.isExistingEntry) "Your unsaved changes will be lost." else "You haven't saved this entry. Discard it?") },
             confirmButton = {
                 TextButton(onClick = { showDiscardDialog = false; onBack() }) {
                     Text("Discard", color = MaterialTheme.colorScheme.error)
@@ -139,7 +166,8 @@ private fun JournalEditorScreen(
 ) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
-    val canSave = state.title.isNotBlank() || state.body.isNotBlank()
+    val totalChars = state.title.trim().length + state.body.trim().length
+    val canSave = totalChars >= 10
 
     Column(
         modifier = modifier
@@ -162,7 +190,7 @@ private fun JournalEditorScreen(
                 )
             }
             Text(
-                text = if (state.isExistingEntry) "Edit entry" else "New entry",
+                text = if (state.isExistingEntry) "Edit Journal Entry" else "New Journal Entry",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -179,28 +207,35 @@ private fun JournalEditorScreen(
                     )
                 }
             }
-            Button(
+            TextButton(
                 onClick = onSave,
                 enabled = canSave && !state.isSaving,
-                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-                shape = RoundedCornerShape(dimensions.cardRadius),
-                contentPadding = PaddingValues(horizontal = dimensions.md, vertical = dimensions.sm)
+                colors = ButtonDefaults.textButtonColors(contentColor = colors.accent)
             ) {
-                Text("Save", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = "Save",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
         LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
             contentPadding = PaddingValues(
                 start = dimensions.screenPadding,
                 end = dimensions.screenPadding,
                 top = dimensions.sm,
-                bottom = dimensions.xxl * 2
+                bottom = dimensions.navHeight + dimensions.xxl
             ),
             verticalArrangement = Arrangement.spacedBy(dimensions.lg)
         ) {
+            // Title field
             item {
-                // Title field
                 OutlinedTextField(
                     value = state.title,
                     onValueChange = onTitleChange,
@@ -217,86 +252,255 @@ private fun JournalEditorScreen(
                         fontWeight = FontWeight.SemiBold
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0f),
-                        focusedBorderColor = colors.accent.copy(alpha = 0.4f)
+                        unfocusedBorderColor = colors.cardBorder,
+                        focusedBorderColor = colors.accent.copy(alpha = 0.6f),
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedContainerColor = Color.Transparent
                     ),
                     singleLine = true
                 )
             }
 
+            // Mood selector
             item {
-                // Mood selector
                 Column(verticalArrangement = Arrangement.spacedBy(dimensions.sm)) {
                     Text(
                         text = "HOW ARE YOU FEELING?",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.accent
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(dimensions.sm)) {
-                        items(JournalMoods) { mood ->
-                            val selected = state.mood == mood
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(dimensions.cardRadius))
-                                    .background(
-                                        if (selected) colors.accent else MaterialTheme.colorScheme.surfaceContainer
-                                    )
-                                    .border(
-                                        width = dimensions.xxs / 4,
-                                        color = if (selected) colors.accent else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(dimensions.cardRadius)
-                                    )
-                                    .clickable { onMoodChange(if (selected) "" else mood) }
-                                    .padding(horizontal = dimensions.md, vertical = dimensions.sm),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = mood,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.xs)
+                    ) {
+                        SimpleMoods.forEach { mood ->
+                            val selected = state.mood == mood.label
+                            MoodChip(
+                                mood = mood,
+                                selected = selected,
+                                onClick = { onMoodChange(if (selected) "" else mood.label) },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
             }
 
+            // Body field
             item {
-                // Body field
-                OutlinedTextField(
-                    value = state.body,
-                    onValueChange = onBodyChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = dimensions.navHeight * 4),
-                    placeholder = {
+                Column {
+                    OutlinedTextField(
+                        value = state.body,
+                        onValueChange = { if (it.length <= 1000) onBodyChange(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = dimensions.navHeight * 4),
+                        placeholder = {
+                            Text(
+                                "Write your thoughts\u2026",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = colors.accent.copy(alpha = 0.4f),
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedContainerColor = Color.Transparent
+                        ),
+                        minLines = 6
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
                         Text(
-                            "What's on your mind today?",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            text = "${state.body.length} / 1000",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        focusedBorderColor = colors.accent.copy(alpha = 0.5f)
-                    ),
-                    minLines = 6
-                )
+                    }
+                }
+            }
+
+            // Writing Tip card
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cardRadius),
+                    color = colors.softIconContainer,
+                    border = BorderStroke(dimensions.xxs / 4, colors.cardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(dimensions.md),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.sm),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.EmojiObjects,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier.size(dimensions.icon)
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.xxs)
+                        ) {
+                            Text(
+                                text = "WRITING TIP",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colors.accent
+                            )
+                            Text(
+                                text = "There\u2019s no right or wrong way to journal. Just write what\u2019s on your mind.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Metadata rows
+            item {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    MetadataRow(
+                        label = "Date",
+                        value = formatDisplayDate(state.createdAtMillis),
+                        trailingIcon = Icons.Rounded.Edit
+                    )
+                    MetadataRow(
+                        label = "Tags",
+                        value = "Add tags",
+                        trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight
+                    )
+                    MetadataRow(
+                        label = "Privacy",
+                        value = "Private",
+                        trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            }
+
+            // Bottom Save Entry + Discard buttons
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(dimensions.sm)) {
+                    Button(
+                        onClick = onSave,
+                        enabled = canSave && !state.isSaving,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.pillRadius),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent)
+                    ) {
+                        Text(
+                            text = "Save Entry",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    if (!state.isExistingEntry) {
+                        TextButton(
+                            onClick = onBack,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Discard",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+@Composable
+internal fun MoodChip(
+    mood: SimpleMood,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalNoContactColors.current
+    val dimensions = LocalNoContactDimensions.current
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(dimensions.cardRadius))
+            .background(if (selected) colors.accentSoft else MaterialTheme.colorScheme.surfaceContainer)
+            .border(
+                width = dimensions.xxs / 4,
+                color = if (selected) colors.accent else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(dimensions.cardRadius)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = dimensions.xxs, vertical = dimensions.xs),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(dimensions.xxs)
+    ) {
+        Icon(
+            imageVector = mood.icon,
+            contentDescription = mood.label,
+            tint = if (selected) colors.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(dimensions.xl)
+        )
+        Text(
+            text = mood.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) colors.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun MetadataRow(label: String, value: String, trailingIcon: ImageVector) {
+    val dimensions = LocalNoContactDimensions.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = dimensions.md, vertical = dimensions.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Icon(
+            imageVector = trailingIcon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(dimensions.icon)
+        )
+    }
+}
+
+private fun formatDisplayDate(millis: Long): String =
+    SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
 
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
 @Composable
 private fun JournalEditorPreview() {
     NoContactTheme {
         JournalEditorScreen(
-            state = EditorUiState(title = "Tough day", mood = "Hopeful", body = "But I stayed strong."),
+            state = EditorUiState(title = "Tough day", mood = "Good", body = "But I stayed strong."),
             onTitleChange = {}, onBodyChange = {}, onMoodChange = {},
             onSave = {}, onBack = {}, onDeleteClick = {}
         )

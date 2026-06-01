@@ -28,9 +28,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Brightness4
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.NotificationsNone
@@ -43,6 +46,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -51,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.appylabs.nocontact.NoContactApplication
 import com.appylabs.nocontact.data.BreakupProfileEntity
+import com.appylabs.nocontact.ui.onboarding.BreakupType
 import com.appylabs.nocontact.ui.theme.LocalNoContactColors
 import com.appylabs.nocontact.ui.theme.LocalNoContactDimensions
 import com.appylabs.nocontact.ui.theme.NoContactTheme
@@ -147,6 +153,8 @@ fun SettingsRoute(
                     viewModel.updateCheckInNotifications(false)
                 }
             },
+            onBreakupTypeChange = viewModel::updateBreakupType,
+            onDarkModeChange = { enabled -> viewModel.updateDarkMode(if (enabled) 1 else null) },
             onPlaceholder = viewModel::showPlaceholder,
             onResetAllData = viewModel::resetAllData
         )
@@ -167,6 +175,8 @@ fun SettingsScreen(
     onCheckInTimeChange: (String) -> Unit,
     onAffirmationNotificationsChange: (Boolean) -> Unit,
     onCheckInNotificationsChange: (Boolean) -> Unit,
+    onBreakupTypeChange: (String) -> Unit,
+    onDarkModeChange: (Boolean) -> Unit,
     onPlaceholder: (String) -> Unit,
     onResetAllData: () -> Unit,
     modifier: Modifier = Modifier
@@ -175,27 +185,43 @@ fun SettingsScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var timePickerTarget by remember { mutableStateOf<TimePickerTarget?>(null) }
     var showNotificationDialog by remember { mutableStateOf(false) }
+    var showBreakupTypeSheet by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
 
-    LazyColumn(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-        contentPadding = PaddingValues(
-            start = dimensions.screenPadding,
-            top = dimensions.md,
-            end = dimensions.screenPadding,
-            bottom = dimensions.xxl
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimensions.md)
     ) {
-        item { SettingsHeader() }
+        SettingsHeader(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = dimensions.screenPadding, vertical = dimensions.sm)
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = dimensions.screenPadding,
+                top = dimensions.xs,
+                end = dimensions.screenPadding,
+                bottom = dimensions.xxl
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimensions.md)
+        ) {
         item {
             StreakSummaryCard(startMillis = profile?.ncStartDateMillis)
         }
         item {
             SettingsSection(title = "JOURNEY & PREFERENCES") {
+                SettingsRow(
+                    icon = Icons.Rounded.Edit,
+                    title = "Breakup type",
+                    subtitle = BreakupType.entries
+                        .find { it.name == profile?.breakupType }?.title ?: "Not set",
+                    onClick = { showBreakupTypeSheet = true }
+                )
+                SettingsDivider()
                 SettingsRow(
                     icon = Icons.Rounded.CalendarMonth,
                     title = "No Contact start date",
@@ -226,6 +252,21 @@ fun SettingsScreen(
                     title = "Notification settings",
                     subtitle = "Manage all reminders and alerts",
                     onClick = { showNotificationDialog = true }
+                )
+            }
+        }
+        item {
+            SettingsSection(title = "APPEARANCE") {
+                SettingsRow(
+                    icon = Icons.Rounded.Brightness4,
+                    title = "Dark mode",
+                    subtitle = if (profile?.darkModeOverride == 1) "Forced on" else "Following system",
+                    trailing = {
+                        Switch(
+                            checked = profile?.darkModeOverride == 1,
+                            onCheckedChange = onDarkModeChange
+                        )
+                    }
                 )
             }
         }
@@ -264,6 +305,7 @@ fun SettingsScreen(
             DangerRow(onClick = { showResetDialog = true })
         }
     }
+    } // end Column
 
     if (showDatePicker) {
         SettingsDatePickerDialog(
@@ -288,6 +330,17 @@ fun SettingsScreen(
                 }
                 timePickerTarget = null
             }
+        )
+    }
+
+    if (showBreakupTypeSheet) {
+        BreakupTypeSheet(
+            current = BreakupType.entries.find { it.name == profile?.breakupType },
+            onSelect = { type ->
+                onBreakupTypeChange(type.name)
+                showBreakupTypeSheet = false
+            },
+            onDismiss = { showBreakupTypeSheet = false }
         )
     }
 
@@ -325,12 +378,95 @@ fun SettingsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsHeader() {
+private fun BreakupTypeSheet(
+    current: BreakupType?,
+    onSelect: (BreakupType) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalNoContactColors.current
+    val dimensions = LocalNoContactDimensions.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                start = dimensions.screenPadding,
+                end = dimensions.screenPadding,
+                bottom = dimensions.xxl + dimensions.lg
+            )
+        ) {
+            Text(
+                text = "Breakup type",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(dimensions.xs))
+            Text(
+                text = "How did the relationship end?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(dimensions.lg))
+
+            BreakupType.entries.forEachIndexed { index, type ->
+                val selected = type == current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(dimensions.cardRadius))
+                        .background(
+                            if (selected) colors.accentSoft.copy(alpha = 0.35f)
+                            else MaterialTheme.colorScheme.surfaceContainer
+                        )
+                        .clickable { onSelect(type) }
+                        .padding(horizontal = dimensions.md, vertical = dimensions.md),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = type.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                            color = if (selected) colors.accent else MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(dimensions.xxs))
+                        Text(
+                            text = type.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (selected) {
+                        Spacer(Modifier.width(dimensions.md))
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "Selected",
+                            tint = colors.accent,
+                            modifier = Modifier.size(dimensions.iconLarge)
+                        )
+                    }
+                }
+                if (index < BreakupType.entries.lastIndex) {
+                    Spacer(Modifier.height(dimensions.sm))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsHeader(modifier: Modifier = Modifier) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
 
-    Column {
+    Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -814,6 +950,8 @@ private fun SettingsScreenPreview() {
             onCheckInTimeChange = {},
             onAffirmationNotificationsChange = {},
             onCheckInNotificationsChange = {},
+            onBreakupTypeChange = {},
+            onDarkModeChange = {},
             onPlaceholder = {},
             onResetAllData = {}
         )

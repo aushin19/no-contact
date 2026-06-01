@@ -9,9 +9,13 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.appylabs.nocontact.MainActivity
+import com.appylabs.nocontact.MainActivity.Companion.DEST_HOME
+import com.appylabs.nocontact.MainActivity.Companion.DEST_HOME_MOOD
+import com.appylabs.nocontact.MainActivity.Companion.EXTRA_DESTINATION
 import com.appylabs.nocontact.NoContactApplication
 import com.appylabs.nocontact.notification.NotificationScheduler.Companion.CHANNEL_AFFIRMATION
 import com.appylabs.nocontact.notification.NotificationScheduler.Companion.CHANNEL_CHECKIN
+import com.appylabs.nocontact.notification.NotificationScheduler.Companion.CHANNEL_MILESTONE
 import com.appylabs.nocontact.notification.NotificationScheduler.Companion.EXTRA_TYPE
 import com.appylabs.nocontact.notification.NotificationScheduler.Companion.TYPE_AFFIRMATION
 import com.appylabs.nocontact.notification.NotificationScheduler.Companion.TYPE_CHECKIN
@@ -26,14 +30,6 @@ class NotificationReceiver : BroadcastReceiver() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannels(manager)
 
-        val tapIntent = PendingIntent.getActivity(
-            context, 0,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         when (type) {
             TYPE_AFFIRMATION -> {
                 if (!profile.notifAffirmationOn) return
@@ -43,7 +39,7 @@ class NotificationReceiver : BroadcastReceiver() {
                         .setSmallIcon(android.R.drawable.ic_popup_reminder)
                         .setContentTitle("Your daily affirmation")
                         .setContentText("Open the app for today's message and keep your streak alive.")
-                        .setContentIntent(tapIntent)
+                        .setContentIntent(buildTapIntent(context, TYPE_AFFIRMATION, DEST_HOME))
                         .setAutoCancel(true)
                         .build()
                 )
@@ -57,7 +53,7 @@ class NotificationReceiver : BroadcastReceiver() {
                         .setSmallIcon(android.R.drawable.ic_popup_reminder)
                         .setContentTitle("How are you feeling today?")
                         .setContentText("Take a moment to check in with yourself.")
-                        .setContentIntent(tapIntent)
+                        .setContentIntent(buildTapIntent(context, TYPE_CHECKIN, DEST_HOME_MOOD))
                         .setAutoCancel(true)
                         .build()
                 )
@@ -65,6 +61,17 @@ class NotificationReceiver : BroadcastReceiver() {
             }
         }
     }
+
+    private fun buildTapIntent(context: Context, requestCode: Int, destination: String): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            requestCode,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_DESTINATION, destination)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
     private fun ensureChannels(manager: NotificationManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -81,6 +88,13 @@ class NotificationReceiver : BroadcastReceiver() {
                     "Mood Check-ins",
                     NotificationManager.IMPORTANCE_DEFAULT
                 ).apply { description = "Daily mood check-in reminders" }
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_MILESTONE,
+                    "Milestone Unlocked",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply { description = "Badge unlock notifications" }
             )
         }
     }

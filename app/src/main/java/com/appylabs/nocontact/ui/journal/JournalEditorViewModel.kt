@@ -19,7 +19,8 @@ data class EditorUiState(
     val body: String = "",
     val mood: String = "",
     val isSaving: Boolean = false,
-    val isExistingEntry: Boolean = false
+    val isExistingEntry: Boolean = false,
+    val createdAtMillis: Long = System.currentTimeMillis()
 )
 
 sealed interface EditorEvent {
@@ -27,7 +28,7 @@ sealed interface EditorEvent {
     data object Deleted : EditorEvent
 }
 
-val JournalMoods = listOf("Hopeful", "Grateful", "Calm", "Proud", "Okay", "Sad", "Anxious", "Numb")
+val JournalMoods = listOf("Very Bad", "Bad", "Neutral", "Good", "Very Good")
 
 class JournalEditorViewModel(
     private val repository: NoContactRepository,
@@ -48,7 +49,7 @@ class JournalEditorViewModel(
                 val entry = repository.getJournalEntryById(entryId)
                 if (entry != null) {
                     existingEntry = entry
-                    _state.update { it.copy(title = entry.title, body = entry.body, mood = entry.mood, isExistingEntry = true) }
+                    _state.update { it.copy(title = entry.title, body = entry.body, mood = entry.mood, isExistingEntry = true, createdAtMillis = entry.createdAtMillis) }
                 }
             }
         }

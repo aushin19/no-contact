@@ -22,7 +22,7 @@ data class JournalUiState(
 )
 
 // Moods considered positive for stats
-private val PositiveMoods = setOf("Hopeful", "Grateful", "Calm", "Proud", "Okay", "Happy")
+private val PositiveMoods = setOf("Hopeful", "Grateful", "Calm", "Proud", "Okay", "Happy", "Good", "Very Good")
 
 class JournalViewModel(private val repository: NoContactRepository) : ViewModel() {
 

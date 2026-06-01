@@ -17,7 +17,13 @@ class NoContactApplication : Application() {
     }
 
     val repository: NoContactRepository by lazy {
-        NoContactRepository(database.breakupProfileDao(), database.journalEntryDao())
+        NoContactRepository(
+            breakupProfileDao = database.breakupProfileDao(),
+            journalEntryDao = database.journalEntryDao(),
+            streakLogDao = database.streakLogDao(),
+            sosSessionDao = database.sosSessionDao(),
+            moodCheckinDao = database.moodCheckinDao()
+        )
     }
 
     val notificationScheduler: NotificationScheduler by lazy {

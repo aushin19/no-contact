@@ -8,13 +8,22 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [BreakupProfileEntity::class, JournalEntryEntity::class],
-    version = 3,
+    entities = [
+        BreakupProfileEntity::class,
+        JournalEntryEntity::class,
+        StreakLogEntity::class,
+        SosSessionEntity::class,
+        MoodCheckinEntity::class,
+    ],
+    version = 5,
     exportSchema = false
 )
 abstract class NoContactDatabase : RoomDatabase() {
     abstract fun breakupProfileDao(): BreakupProfileDao
     abstract fun journalEntryDao(): JournalEntryDao
+    abstract fun streakLogDao(): StreakLogDao
+    abstract fun sosSessionDao(): SosSessionDao
+    abstract fun moodCheckinDao(): MoodCheckinDao
 
     companion object {
         private const val DatabaseName = "breakfree_db"
@@ -25,7 +34,7 @@ abstract class NoContactDatabase : RoomDatabase() {
                 NoContactDatabase::class.java,
                 DatabaseName
             )
-                .addMigrations(Migration1To2, Migration2To3)
+                .addMigrations(Migration1To2, Migration2To3, Migration3To4, Migration4To5)
                 .build()
         }
 
@@ -118,6 +127,57 @@ abstract class NoContactDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS journal_entry (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, mood TEXT NOT NULL, created_at_millis INTEGER NOT NULL)"
+                )
+            }
+        }
+
+        private val Migration3To4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS streak_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        streak_start INTEGER NOT NULL,
+                        streak_end INTEGER NOT NULL,
+                        streak_days INTEGER NOT NULL,
+                        reason_tag TEXT,
+                        note TEXT,
+                        created_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sos_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        trigger_tags TEXT NOT NULL,
+                        outcome TEXT NOT NULL,
+                        duration_seconds INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS mood_checkins (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        mood_tag TEXT NOT NULL,
+                        note TEXT,
+                        date TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_mood_checkins_date ON mood_checkins (date)"
+                )
+            }
+        }
+
+        private val Migration4To5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE breakup_profile ADD COLUMN dark_mode_override INTEGER DEFAULT NULL"
                 )
             }
         }

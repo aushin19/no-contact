@@ -222,8 +222,8 @@ private fun OnboardingScaffold(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(top = dimensions.xl, bottom = dimensions.lg),
-                verticalArrangement = Arrangement.spacedBy(dimensions.md)
+                    .padding(top = dimensions.lg, bottom = dimensions.lg),
+                verticalArrangement = Arrangement.spacedBy(dimensions.sm)
             ) {
                 content()
                 if (state.errorMessage != null) {
@@ -239,8 +239,8 @@ private fun OnboardingScaffold(
                 enabled = canSubmit && !state.isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(dimensions.navHeight)
-                    .defaultMinSize(minHeight = dimensions.navHeight),
+                    .height(dimensions.navHeight - dimensions.xs)
+                    .defaultMinSize(minHeight = dimensions.navHeight - dimensions.xs),
                 shape = RoundedCornerShape(dimensions.pillRadius),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.accent,
@@ -251,14 +251,14 @@ private fun OnboardingScaffold(
             ) {
                 Text(
                     text = primaryLabel,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.weight(1f))
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                     contentDescription = null,
-                    modifier = Modifier.size(dimensions.iconLarge + dimensions.sm)
+                    modifier = Modifier.size(dimensions.iconLarge)
                 )
             }
         }
@@ -306,20 +306,20 @@ private fun OnboardingProgressHeader(
             Spacer(Modifier.width(dimensions.sm))
             Text(
                 text = "NoContact",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = onboardingColors.content,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = "$step",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 color = colors.accent,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = " / $count",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 color = onboardingColors.contentMuted,
                 fontWeight = FontWeight.Bold
             )
@@ -643,14 +643,14 @@ private fun PageHeader(eyebrow: String, title: String, body: String) {
         )
         Text(
             text = title,
-            style = MaterialTheme.typography.displayMedium,
+            style = MaterialTheme.typography.headlineMedium,
             color = onboardingColors.content,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.semantics { heading() }
         )
         Text(
             text = body,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.bodyLarge,
             color = onboardingColors.contentMuted
         )
     }
@@ -674,7 +674,7 @@ private fun IntroHeroHeader() {
                 }
                 append("\nRebuild\nyour life.")
             },
-            style = MaterialTheme.typography.displayMedium,
+            style = MaterialTheme.typography.headlineLarge,
             color = onboardingColors.content,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
@@ -683,7 +683,7 @@ private fun IntroHeroHeader() {
         )
         Text(
             text = "NoContact helps you stay strong when the urge hits and guide you to a better you.",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.bodyLarge,
             color = onboardingColors.contentMuted,
             modifier = Modifier.fillMaxWidth(0.66f)
         )
@@ -720,7 +720,7 @@ private fun SelectableOnboardingCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = dimensions.navHeight)
+                .defaultMinSize(minHeight = dimensions.navHeight - dimensions.sm)
                 .padding(dimensions.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -729,13 +729,13 @@ private fun SelectableOnboardingCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     color = onboardingColors.content,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = onboardingColors.contentMuted
                 )
             }
@@ -928,13 +928,13 @@ private fun PremiumFeatureList(items: List<FeatureItem>) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = onboardingColors.content,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = item.description,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = onboardingColors.contentMuted
                     )
                 }
@@ -1010,8 +1010,8 @@ private fun PremiumPanel(content: @Composable ColumnScope.() -> Unit) {
         contentColor = onboardingColors.content,
     ) {
         Column(
-            modifier = Modifier.padding(dimensions.xl),
-            verticalArrangement = Arrangement.spacedBy(dimensions.lg),
+            modifier = Modifier.padding(dimensions.lg),
+            verticalArrangement = Arrangement.spacedBy(dimensions.md),
             content = content
         )
     }
@@ -1024,7 +1024,7 @@ private fun IconBubble(icon: ImageVector, selected: Boolean) {
     val onboardingColors = LocalNoContactOnboardingColors.current
 
     Surface(
-        modifier = Modifier.size(dimensions.navHeight - dimensions.xs),
+        modifier = Modifier.size(dimensions.navHeight - dimensions.md),
         shape = MaterialTheme.shapes.large,
         color = if (selected) colors.accent.copy(alpha = 0.18f) else onboardingColors.panelHigh.copy(alpha = 0.82f)
     ) {
@@ -1033,7 +1033,7 @@ private fun IconBubble(icon: ImageVector, selected: Boolean) {
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (selected) colors.accent else onboardingColors.contentMuted,
-                modifier = Modifier.size(dimensions.iconLarge)
+                modifier = Modifier.size(dimensions.icon)
             )
         }
     }

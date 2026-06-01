@@ -68,6 +68,18 @@ class SettingsViewModel(
         }
     }
 
+    fun updateBreakupType(type: String) {
+        launchSave("Breakup type updated.") {
+            repository.updateBreakupType(type)
+        }
+    }
+
+    fun updateDarkMode(override: Int?) {
+        viewModelScope.launch {
+            runCatching { repository.updateDarkMode(override) }
+        }
+    }
+
     fun resetAllData() {
         viewModelScope.launch {
             runCatching {

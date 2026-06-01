@@ -4,7 +4,10 @@ import kotlinx.coroutines.flow.Flow
 
 class NoContactRepository(
     private val breakupProfileDao: BreakupProfileDao,
-    private val journalEntryDao: JournalEntryDao
+    private val journalEntryDao: JournalEntryDao,
+    private val streakLogDao: StreakLogDao,
+    private val sosSessionDao: SosSessionDao,
+    private val moodCheckinDao: MoodCheckinDao
 ) {
     val profile: Flow<BreakupProfileEntity?> = breakupProfileDao.getProfile()
 
@@ -36,10 +39,36 @@ class NoContactRepository(
         breakupProfileDao.updateCheckInNotifications(enabled)
     }
 
+    suspend fun updateBreakupType(type: String) {
+        breakupProfileDao.updateBreakupType(type)
+    }
+
+    suspend fun updateDarkMode(override: Int?) {
+        breakupProfileDao.updateDarkMode(override)
+    }
+
     suspend fun clearProfile() {
         breakupProfileDao.clearProfile()
         journalEntryDao.clearAll()
+        streakLogDao.clearAll()
+        sosSessionDao.clearAll()
+        moodCheckinDao.clearAll()
     }
+
+    // Streak log methods
+    suspend fun saveStreakLog(log: StreakLogEntity) = streakLogDao.insert(log)
+    val streakLogs: Flow<List<StreakLogEntity>> = streakLogDao.getAll()
+    suspend fun getTotalRelapseCount(): Int = streakLogDao.getTotalRelapseCount()
+
+    // SOS session methods
+    suspend fun saveSosSession(session: SosSessionEntity) = sosSessionDao.insert(session)
+    val sosSessions: Flow<List<SosSessionEntity>> = sosSessionDao.getAll()
+    suspend fun getResistCountSince(since: Long): Int = sosSessionDao.getResistCountSince(since)
+
+    // Mood check-in methods
+    suspend fun saveMoodCheckin(checkin: MoodCheckinEntity) = moodCheckinDao.upsert(checkin)
+    suspend fun getMoodCheckinForDate(date: String): MoodCheckinEntity? = moodCheckinDao.getCheckinForDate(date)
+    val moodCheckins: Flow<List<MoodCheckinEntity>> = moodCheckinDao.getAll()
 
     // Journal methods
     val journalEntries: Flow<List<JournalEntryEntity>> = journalEntryDao.getAll()

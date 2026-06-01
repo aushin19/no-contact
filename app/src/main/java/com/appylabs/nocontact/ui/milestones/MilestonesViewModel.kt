@@ -23,7 +23,8 @@ data class BadgeState(
     val days: Int,
     val label: String,
     val achieved: Boolean,
-    val achievedDateLabel: String
+    val achievedDateLabel: String,
+    val achievedAtMillis: Long = 0L
 )
 
 data class MilestoneHistoryState(
@@ -91,13 +92,13 @@ private fun buildUiState(profile: BreakupProfileEntity?, nowMillis: Long): Miles
 
     val badges = MilestoneTargets.map { target ->
         val achieved = totalDays >= target
+        val achievedAtMillis = start + TimeUnit.DAYS.toMillis(target.toLong())
         BadgeState(
             days = target,
             label = "$target ${if (target == 1) "Day" else "Days"}",
             achieved = achieved,
-            achievedDateLabel = if (achieved) {
-                formatDate(start + TimeUnit.DAYS.toMillis(target.toLong()))
-            } else ""
+            achievedDateLabel = if (achieved) formatShortDate(achievedAtMillis) else "",
+            achievedAtMillis = if (achieved) achievedAtMillis else 0L
         )
     }
 
@@ -111,7 +112,7 @@ private fun buildUiState(profile: BreakupProfileEntity?, nowMillis: Long): Miles
             MilestoneHistoryState(
                 days = badge.days,
                 title = "${badge.label} Milestone",
-                dateLabel = badge.achievedDateLabel,
+                dateLabel = formatDate(badge.achievedAtMillis),
                 deltaLabel = "+$delta ${if (delta == 1) "day" else "days"}"
             )
         }
@@ -145,3 +146,6 @@ private fun buildUiState(profile: BreakupProfileEntity?, nowMillis: Long): Miles
 
 private fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy, h:mm a", Locale.getDefault()).format(Date(millis))
+
+private fun formatShortDate(millis: Long): String =
+    SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(millis))

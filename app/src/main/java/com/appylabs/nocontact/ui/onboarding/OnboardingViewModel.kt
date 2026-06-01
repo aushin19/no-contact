@@ -77,13 +77,27 @@ class OnboardingViewModel(
             update { copy(errorMessage = "Date must be today or earlier.") }
             return
         }
+        // For NC start date: if the user picks today, use the exact current time
+        // so the streak begins at 0h 0m rather than hours-since-midnight.
+        val effective = if (!isBreakupDate && isTodayLocal(millis)) {
+            System.currentTimeMillis()
+        } else {
+            millis
+        }
         update {
             if (isBreakupDate) {
-                copy(breakupDateMillis = millis, errorMessage = null)
+                copy(breakupDateMillis = effective, errorMessage = null)
             } else {
-                copy(ncStartDateMillis = millis, errorMessage = null)
+                copy(ncStartDateMillis = effective, errorMessage = null)
             }
         }
+    }
+
+    private fun isTodayLocal(millis: Long): Boolean {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+        val now = java.util.Calendar.getInstance()
+        return cal.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR) &&
+            cal.get(java.util.Calendar.DAY_OF_YEAR) == now.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
     private fun toggleTrigger(trigger: TriggerTag) {

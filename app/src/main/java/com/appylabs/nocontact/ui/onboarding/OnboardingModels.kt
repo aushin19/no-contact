@@ -83,7 +83,7 @@ enum class StreakGoalDays(val days: Int, val title: String) {
 data class OnboardingUiState(
     val currentPageIndex: Int = 0,
     val breakupDateMillis: Long = todayStartMillis(),
-    val ncStartDateMillis: Long = todayStartMillis(),
+    val ncStartDateMillis: Long = System.currentTimeMillis(),
     val breakupType: BreakupType? = null,
     val triggerTags: Set<TriggerTag> = emptySet(),
     val reasonAnchor: String = "",
