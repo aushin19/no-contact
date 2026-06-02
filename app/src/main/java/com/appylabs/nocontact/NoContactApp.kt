@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import com.appylabs.nocontact.ui.theme.IconJournalBook
-import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Settings
@@ -49,7 +49,7 @@ import com.appylabs.nocontact.ui.home.HomeScreen
 import com.appylabs.nocontact.ui.journal.JournalDetailRoute
 import com.appylabs.nocontact.ui.journal.JournalEditorRoute
 import com.appylabs.nocontact.ui.journal.JournalRoute
-import com.appylabs.nocontact.ui.milestones.MilestonesRoute
+import com.appylabs.nocontact.ui.progress.ProgressRoute
 import com.appylabs.nocontact.ui.onboarding.OnboardingRoute
 import com.appylabs.nocontact.ui.settings.SettingsRoute
 import com.appylabs.nocontact.ui.sos.SosScreen
@@ -77,7 +77,7 @@ private data class BottomDestination(
 private val BottomDestinations = listOf(
     BottomDestination(AppRoute.Home, "Home", Icons.Rounded.Home),
     BottomDestination(AppRoute.Journal, "Journal", IconJournalBook),
-    BottomDestination(AppRoute.Milestones, "Milestones", Icons.Rounded.EmojiEvents),
+    BottomDestination(AppRoute.Milestones, "Progress", Icons.AutoMirrored.Rounded.TrendingUp),
     BottomDestination(AppRoute.Settings, "Settings", Icons.Rounded.Settings)
 )
 
@@ -230,7 +230,7 @@ fun NoContactApp(
                 )
             }
             composable(AppRoute.Milestones) {
-                MilestonesRoute(modifier = Modifier.padding(innerPadding))
+                ProgressRoute(modifier = Modifier.padding(innerPadding))
             }
             composable(AppRoute.Settings) {
                 SettingsRoute(

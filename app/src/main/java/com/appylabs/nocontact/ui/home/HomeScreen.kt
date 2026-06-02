@@ -919,51 +919,60 @@ private fun StreakHeroCard(
     val dimensions = LocalNoContactDimensions.current
 
     NoContactCard(radius = dimensions.heroRadius) {
-        Column(modifier = Modifier.padding(dimensions.cardPadding)) {
-            // Header: label + stats chip
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Column {
+            // Accent header strip with Stats chip trailing
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(listOf(colors.accentSoft, Color.Transparent))
+                    )
+                    .padding(horizontal = dimensions.md, vertical = dimensions.sm)
             ) {
-                Text(
-                    text = "YOUR STREAK",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics { heading() }
-                )
-                Surface(
-                    shape = CircleShape,
-                    color = colors.softIconContainer,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable(onClick = onStatsClick)
-                        .semantics { role = Role.Button }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = dimensions.sm,
-                            vertical = dimensions.xxs
-                        ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.xxs)
+                    Text(
+                        text = "YOUR STREAK",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.accent,
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics { heading() }
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = colors.softIconContainer,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable(onClick = onStatsClick)
+                            .semantics { role = Role.Button }
                     ) {
-                        Icon(
-                            imageVector = IconChartBar,
-                            contentDescription = "View stats",
-                            tint = colors.accent,
-                            modifier = Modifier.size(dimensions.icon)
-                        )
-                        Text(
-                            text = "Stats",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = dimensions.sm,
+                                vertical = dimensions.xxs
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.xxs)
+                        ) {
+                            Icon(
+                                imageVector = IconChartBar,
+                                contentDescription = "View stats",
+                                tint = colors.accent,
+                                modifier = Modifier.size(dimensions.icon)
+                            )
+                            Text(
+                                text = "Stats",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
-            Spacer(Modifier.height(dimensions.sm))
+            Column(modifier = Modifier.padding(dimensions.cardPadding)) {
             // Days — large, bold, red
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
@@ -1045,6 +1054,7 @@ private fun StreakHeroCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+            } // end inner Column
         }
     }
 }
@@ -1257,7 +1267,8 @@ private fun HomeNavRow(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(dimensions.iconLarge)
             )
         }
     }

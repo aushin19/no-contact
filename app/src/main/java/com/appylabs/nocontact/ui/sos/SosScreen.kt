@@ -276,7 +276,7 @@ private fun SosContent(
                 start = dimensions.screenPadding,
                 top = dimensions.xs,
                 end = dimensions.screenPadding,
-                bottom = dimensions.md
+                bottom = dimensions.xxl + dimensions.md
             ),
             verticalArrangement = Arrangement.spacedBy(dimensions.sm)
         ) {

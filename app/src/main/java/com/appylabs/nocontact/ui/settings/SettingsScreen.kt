@@ -27,30 +27,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Brightness4
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -68,6 +68,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -101,7 +103,6 @@ fun SettingsRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Pending notification action to execute once permission is granted
     var pendingNotificationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -184,7 +185,6 @@ fun SettingsScreen(
     val dimensions = LocalNoContactDimensions.current
     var showDatePicker by remember { mutableStateOf(false) }
     var timePickerTarget by remember { mutableStateOf<TimePickerTarget?>(null) }
-    var showNotificationDialog by remember { mutableStateOf(false) }
     var showBreakupTypeSheet by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
 
@@ -205,107 +205,113 @@ fun SettingsScreen(
                 start = dimensions.screenPadding,
                 top = dimensions.xs,
                 end = dimensions.screenPadding,
-                bottom = dimensions.xxl
+                bottom = dimensions.xxl + dimensions.md
             ),
-            verticalArrangement = Arrangement.spacedBy(dimensions.md)
+            verticalArrangement = Arrangement.spacedBy(dimensions.sm)
         ) {
-        item {
-            StreakSummaryCard(startMillis = profile?.ncStartDateMillis)
-        }
-        item {
-            SettingsSection(title = "JOURNEY & PREFERENCES") {
-                SettingsRow(
-                    icon = Icons.Rounded.Edit,
-                    title = "Breakup type",
-                    subtitle = BreakupType.entries
-                        .find { it.name == profile?.breakupType }?.title ?: "Not set",
-                    onClick = { showBreakupTypeSheet = true }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Rounded.CalendarMonth,
-                    title = "No Contact start date",
-                    subtitle = profile?.ncStartDateMillis?.let(::formatDate) ?: "Not set",
-                    onClick = { showDatePicker = true }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Rounded.AccessTime,
-                    title = "Affirmation notification time",
-                    subtitle = profile?.notifAffirmationTime?.let(::formatTimeLabel) ?: "Not set",
-                    onClick = {
-                        timePickerTarget = TimePickerTarget.Affirmation(profile?.notifAffirmationTime.orEmpty())
-                    }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Rounded.FavoriteBorder,
-                    title = "Mood check-in reminder",
-                    subtitle = profile?.notifCheckinTime?.let(::formatTimeLabel) ?: "Not set",
-                    onClick = {
-                        timePickerTarget = TimePickerTarget.CheckIn(profile?.notifCheckinTime.orEmpty())
-                    }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Rounded.NotificationsNone,
-                    title = "Notification settings",
-                    subtitle = "Manage all reminders and alerts",
-                    onClick = { showNotificationDialog = true }
-                )
+            item {
+                StreakSummaryCard(startMillis = profile?.ncStartDateMillis)
             }
-        }
-        item {
-            SettingsSection(title = "APPEARANCE") {
-                SettingsRow(
-                    icon = Icons.Rounded.Brightness4,
-                    title = "Dark mode",
-                    subtitle = if (profile?.darkModeOverride == 1) "Forced on" else "Following system",
-                    trailing = {
-                        Switch(
-                            checked = profile?.darkModeOverride == 1,
-                            onCheckedChange = onDarkModeChange
-                        )
-                    }
-                )
+            item {
+                SettingsSection(title = "YOUR JOURNEY") {
+                    SettingsRow(
+                        icon = Icons.Rounded.FavoriteBorder,
+                        title = "Breakup type",
+                        subtitle = BreakupType.entries
+                            .find { it.name == profile?.breakupType }?.title ?: "Not set",
+                        onClick = { showBreakupTypeSheet = true }
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Rounded.CalendarMonth,
+                        title = "No Contact start date",
+                        subtitle = profile?.ncStartDateMillis?.let(::formatDate) ?: "Not set",
+                        onClick = { showDatePicker = true }
+                    )
+                }
             }
-        }
-        item {
-            SettingsSection(title = "DATA & SUPPORT") {
-                SettingsRow(
-                    icon = Icons.Rounded.CloudDownload,
-                    title = "Export journal",
-                    subtitle = "Save your entries as a file",
-                    onClick = { onPlaceholder("Journal export will be available when journal storage is added.") }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Rounded.Shield,
-                    title = "Privacy",
-                    subtitle = "Your data stays on your device",
-                    onClick = { onPlaceholder("Your current profile is stored locally on this device.") }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.AutoMirrored.Rounded.HelpOutline,
-                    title = "Help & feedback",
-                    subtitle = "Get help or share feedback",
-                    onClick = { onPlaceholder("Help and feedback links are not configured yet.") }
-                )
+            item {
+                SettingsSection(title = "NOTIFICATIONS") {
+                    SettingsRow(
+                        icon = Icons.Rounded.NotificationsNone,
+                        title = "Daily affirmation",
+                        subtitle = profile?.notifAffirmationTime?.let(::formatTimeLabel) ?: "Not set",
+                        onClick = {
+                            timePickerTarget = TimePickerTarget.Affirmation(profile?.notifAffirmationTime.orEmpty())
+                        },
+                        trailing = {
+                            Switch(
+                                checked = profile?.notifAffirmationOn == true,
+                                onCheckedChange = onAffirmationNotificationsChange,
+                                colors = accentSwitchColors()
+                            )
+                        }
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Rounded.NotificationsNone,
+                        title = "Mood check-in",
+                        subtitle = profile?.notifCheckinTime?.let(::formatTimeLabel) ?: "Not set",
+                        onClick = {
+                            timePickerTarget = TimePickerTarget.CheckIn(profile?.notifCheckinTime.orEmpty())
+                        },
+                        trailing = {
+                            Switch(
+                                checked = profile?.notifCheckinOn == true,
+                                onCheckedChange = onCheckInNotificationsChange,
+                                colors = accentSwitchColors()
+                            )
+                        }
+                    )
+                }
             }
-        }
-        item {
-            Text(
-                text = "DANGER ZONE",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        item {
-            DangerRow(onClick = { showResetDialog = true })
+            item {
+                SettingsSection(title = "APPEARANCE") {
+                    SettingsRow(
+                        icon = Icons.Rounded.Brightness4,
+                        title = "Dark mode",
+                        subtitle = if (profile?.darkModeOverride == 1) "Forced on" else "Follow system",
+                        trailing = {
+                            Switch(
+                                checked = profile?.darkModeOverride == 1,
+                                onCheckedChange = onDarkModeChange,
+                                colors = accentSwitchColors()
+                            )
+                        }
+                    )
+                }
+            }
+            item {
+                SettingsSection(title = "DATA & SUPPORT") {
+                    SettingsRow(
+                        icon = Icons.Rounded.CloudDownload,
+                        title = "Export journal",
+                        subtitle = "Download entries",
+                        onClick = { onPlaceholder("Journal export will be available when journal storage is added.") }
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Rounded.Shield,
+                        title = "Privacy",
+                        subtitle = "Data and perms",
+                        onClick = { onPlaceholder("Your current profile is stored locally on this device.") }
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                        title = "Help & feedback",
+                        subtitle = "Contact support",
+                        onClick = { onPlaceholder("Help and feedback links are not configured yet.") }
+                    )
+                }
+            }
+            item {
+                SettingsSection(title = "DANGER ZONE", isDanger = true) {
+                    DangerRow(onClick = { showResetDialog = true })
+                }
+            }
         }
     }
-    } // end Column
 
     if (showDatePicker) {
         SettingsDatePickerDialog(
@@ -341,16 +347,6 @@ fun SettingsScreen(
                 showBreakupTypeSheet = false
             },
             onDismiss = { showBreakupTypeSheet = false }
-        )
-    }
-
-    if (showNotificationDialog) {
-        NotificationSettingsDialog(
-            affirmationEnabled = profile?.notifAffirmationOn == true,
-            checkInEnabled = profile?.notifCheckinOn == true,
-            onAffirmationChange = onAffirmationNotificationsChange,
-            onCheckInChange = onCheckInNotificationsChange,
-            onDismiss = { showNotificationDialog = false }
         )
     }
 
@@ -467,54 +463,73 @@ private fun SettingsHeader(modifier: Modifier = Modifier) {
     val dimensions = LocalNoContactDimensions.current
 
     Column(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.Rounded.LocalFireDepartment,
+                imageVector = Icons.Rounded.Tune,
                 contentDescription = null,
                 tint = colors.accent,
-                modifier = Modifier.size(dimensions.iconLarge + dimensions.xs)
+                modifier = Modifier.size(dimensions.iconLarge)
             )
             Spacer(Modifier.width(dimensions.sm))
             Text(
-                text = "NoContact",
-                style = MaterialTheme.typography.headlineSmall,
+                text = "Settings",
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f)
+                color = MaterialTheme.colorScheme.onBackground
             )
-            Box {
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Rounded.NotificationsNone,
-                        contentDescription = "Notifications",
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.size(dimensions.iconLarge)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = dimensions.xs, end = dimensions.xs)
-                        .size(dimensions.xs)
-                        .clip(CircleShape)
-                        .background(colors.accent)
-                )
-            }
         }
-        Spacer(Modifier.height(dimensions.lg))
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(dimensions.xs))
+        Spacer(Modifier.height(dimensions.xxs))
         Text(
             text = "Personalize your healing journey.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = dimensions.iconLarge + dimensions.sm)
+        )
+    }
+}
+
+@Composable
+private fun CardAccentStrip(label: String) {
+    val colors = LocalNoContactColors.current
+    val dimensions = LocalNoContactDimensions.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.horizontalGradient(
+                    listOf(colors.accentSoft, Color.Transparent)
+                )
+            )
+            .padding(horizontal = dimensions.md, vertical = dimensions.sm)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.accent
+        )
+    }
+}
+
+@Composable
+private fun CardDangerStrip() {
+    val dimensions = LocalNoContactDimensions.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+                        Color.Transparent
+                    )
+                )
+            )
+            .padding(horizontal = dimensions.md, vertical = dimensions.sm)
+    ) {
+        Text(
+            text = "DANGER ZONE",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.error
         )
     }
 }
@@ -533,51 +548,55 @@ private fun StreakSummaryCard(startMillis: Long?) {
     }
 
     SettingsSurface {
-        Row(
-            modifier = Modifier.padding(dimensions.md),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SoftIconCircle(size = dimensions.navHeight + dimensions.md) {
-                Icon(
-                    imageVector = Icons.Rounded.LocalFireDepartment,
-                    contentDescription = null,
-                    tint = colors.accent,
-                    modifier = Modifier.size(dimensions.xxl)
-                )
-            }
-            Spacer(Modifier.width(dimensions.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "You're doing amazing!",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "Keep showing up for yourself.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(Modifier.width(dimensions.sm))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = streakLabel(startMillis, nowMillis),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.accent,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "Current streak",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
+        Column {
+            CardAccentStrip("YOUR STREAK")
+            Row(
+                modifier = Modifier.padding(dimensions.md),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SoftIconCircle(size = dimensions.xl + dimensions.xs) {
+                    Icon(
+                        imageVector = Icons.Rounded.LocalFireDepartment,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(dimensions.iconLarge)
+                    )
+                }
+                Spacer(Modifier.width(dimensions.md))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "You're doing amazing!",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Keep showing up.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.width(dimensions.sm))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = streakLabel(startMillis, nowMillis),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Current streak",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -586,17 +605,12 @@ private fun StreakSummaryCard(startMillis: Long?) {
 @Composable
 private fun SettingsSection(
     title: String,
+    isDanger: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val dimensions = LocalNoContactDimensions.current
-
-    Column(verticalArrangement = Arrangement.spacedBy(dimensions.sm)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        SettingsSurface {
+    SettingsSurface {
+        Column {
+            if (isDanger) CardDangerStrip() else CardAccentStrip(title)
             Column(content = content)
         }
     }
@@ -613,16 +627,12 @@ private fun SettingsRow(
 ) {
     val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
-    val rowModifier = if (onClick != null) {
-        modifier.clickable(onClick = onClick)
-    } else {
-        modifier
-    }
+    val rowModifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier
 
     Row(
         modifier = rowModifier
             .fillMaxWidth()
-            .padding(horizontal = dimensions.md, vertical = dimensions.md),
+            .padding(horizontal = dimensions.md, vertical = dimensions.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
         SoftIconSquare {
@@ -630,21 +640,22 @@ private fun SettingsRow(
                 imageVector = icon,
                 contentDescription = null,
                 tint = colors.accent,
-                modifier = Modifier.size(dimensions.iconLarge + dimensions.xs)
+                modifier = Modifier.size(dimensions.icon)
             )
         }
         Spacer(Modifier.width(dimensions.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -666,60 +677,52 @@ private fun SettingsRow(
 
 @Composable
 private fun DangerRow(onClick: () -> Unit) {
-    val colors = LocalNoContactColors.current
     val dimensions = LocalNoContactDimensions.current
-    val shape = RoundedCornerShape(dimensions.cardRadius)
 
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = shape,
-        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.42f),
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        border = BorderStroke(dimensions.xxs / 4, colors.accent.copy(alpha = 0.2f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = dimensions.md, vertical = dimensions.sm),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = dimensions.md, vertical = dimensions.md),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .size(dimensions.xl)
+                .clip(RoundedCornerShape(dimensions.xs))
+                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.42f)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(dimensions.navHeight)
-                    .clip(RoundedCornerShape(dimensions.cardRadius))
-                    .background(colors.accent.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.DeleteOutline,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(dimensions.xxl)
-                )
-            }
-            Spacer(Modifier.width(dimensions.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Reset all data",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 1
-                )
-                Text(
-                    text = "This will delete everything permanently.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                imageVector = Icons.Rounded.DeleteOutline,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(dimensions.iconLarge)
+                modifier = Modifier.size(dimensions.icon)
             )
         }
+        Spacer(Modifier.width(dimensions.md))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Reset all data",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1
+            )
+            Text(
+                text = "Cannot be undone",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.width(dimensions.sm))
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(dimensions.iconLarge)
+        )
     }
 }
 
@@ -740,8 +743,9 @@ private fun SettingsSurface(content: @Composable () -> Unit) {
 
 @Composable
 private fun SettingsDivider() {
+    val dimensions = LocalNoContactDimensions.current
     HorizontalDivider(
-        modifier = Modifier.padding(start = LocalNoContactDimensions.current.navHeight + LocalNoContactDimensions.current.lg),
+        modifier = Modifier.padding(start = dimensions.md + dimensions.xl + dimensions.md),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
     )
 }
@@ -753,8 +757,8 @@ private fun SoftIconSquare(content: @Composable () -> Unit) {
 
     Box(
         modifier = Modifier
-            .size(dimensions.navHeight)
-            .clip(RoundedCornerShape(dimensions.cardRadius))
+            .size(dimensions.xl)
+            .clip(RoundedCornerShape(dimensions.xs))
             .background(colors.accentSoft.copy(alpha = 0.62f)),
         contentAlignment = Alignment.Center
     ) {
@@ -776,6 +780,16 @@ private fun SoftIconCircle(
     ) {
         content()
     }
+}
+
+@Composable
+private fun accentSwitchColors(): SwitchColors {
+    val colors = LocalNoContactColors.current
+    return SwitchDefaults.colors(
+        checkedThumbColor = Color.White,
+        checkedTrackColor = colors.accent,
+        checkedBorderColor = colors.accent
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -851,61 +865,6 @@ private fun SettingsTimePickerDialog(
     )
 }
 
-@Composable
-private fun NotificationSettingsDialog(
-    affirmationEnabled: Boolean,
-    checkInEnabled: Boolean,
-    onAffirmationChange: (Boolean) -> Unit,
-    onCheckInChange: (Boolean) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Notification settings") },
-        text = {
-            Column {
-                DialogSwitchRow(
-                    title = "Affirmation notifications",
-                    checked = affirmationEnabled,
-                    onCheckedChange = onAffirmationChange
-                )
-                DialogSwitchRow(
-                    title = "Mood check-ins",
-                    checked = checkInEnabled,
-                    onCheckedChange = onCheckInChange
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Done")
-            }
-        }
-    )
-}
-
-@Composable
-private fun DialogSwitchRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = LocalNoContactDimensions.current.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
 private sealed class TimePickerTarget(
     val title: String,
     val value: String
@@ -936,7 +895,7 @@ private fun formatTimeLabel(time: String): String {
         0 -> 12
         else -> candidate
     }
-    return "%d:%02d %s every day".format(hour12, minute, amPm)
+    return "%d:%02d %s".format(hour12, minute, amPm)
 }
 
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)
